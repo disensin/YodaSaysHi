@@ -136,12 +136,8 @@ def tweakMeToHell():
         except:
             mc.pointConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
             mc.orientConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
-        
-    for i in range(len(tweakCubeOneArray)):
-        # Orient onstrain target control to cube3!
-        mc.orientConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
-        
-        
+    
+    
     
     '''
     mc.bufferCurve(animation = 'keys', overwrite = 0)
