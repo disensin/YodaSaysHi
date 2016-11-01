@@ -1,9 +1,26 @@
+'''
+Isai Calderon
+
+#! WARNING: This code will run the bake tool twice. Be patient.
+
+This code will take the selection with Motion Capture Data and create 3 cubes:
+    Cube 1 will have a cleaned-up version of the selection's motion
+    Cube 2 will have the raw data
+    Cube 3 will be parented directly under Cube 1, but it will have the offsets of Cube 2
+    The original object will be constrained to Cube 3
+    
+Edit Cube 3's peaks and valleys to clean up all the raw data!
+
+'''
 import maya.cmds as mc
 import mAnimLib.mConLib
 
+# Bake keys!
 def bakeTweaks(bakeTweakMe):
+    # Stop refreshing the scene while this code runs
     mc.refresh(suspend=True)
     
+    # Get all the frames in the scene.
     startingFrame = mc.playbackOptions( query = 1, min = 1)
     endingFrame = mc.playbackOptions( query = 1, max = 1)
     mc.bakeResults( bakeTweakMe,
@@ -20,13 +37,15 @@ def bakeTweaks(bakeTweakMe):
                 controlPoints = 0,
                 shape = 1
                 )
+    # Clean up all the rotation curves
     mc.filterCurve(f = 'euler')
     
+    # Enable scene refresh :)
     mc.refresh(suspend=False)
     mc.refresh(force=True)
 
 def tweakMeToHell():
-    # Get selected object
+    # Get selected object(s)
     tweakTargetArray = mc.ls (sl = True)
     
     # If nothing is selected, tell user to select at least one object!
@@ -130,14 +149,17 @@ def tweakMeToHell():
         mc.select(tweakCubeThree)
         mc.delete(cn = 1)
         
-        #################### PROBLEM ########################
+        # Parent Target Object to cube3. If a Parent Constraint doesn't work...
         try:
             mc.parentConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
         except:
-            mc.pointConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
-            mc.orientConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
-    
-    
+            # ...it will try a Point Constraint. If THAT doesn't work...
+            try:
+                mc.pointConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
+            # ...do an Orient Constraint!
+            except:
+                mc.orientConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
+        
     
     '''
     mc.bufferCurve(animation = 'keys', overwrite = 0)
