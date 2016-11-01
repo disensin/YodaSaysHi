@@ -18,8 +18,8 @@ import mAnimLib.mScene
 def scaleMeLikeOneOfYourFrenchGirls():
     
     # Enter the first and last frames from the Avids file in 30 FPS.
-    stFrame = input("Enter the first frame from Avids:")
-    oldEnFrame = input("Enter the last frame from Avids:")
+    stFrame = input("Enter the first frame from the edit:")
+    oldEnFrame = input("Enter the last frame from the edit:")
     
     # Get frame range to approved in/out
     mAnimLib.mScene.setShotTimeline()
@@ -42,9 +42,16 @@ def scaleMeLikeOneOfYourFrenchGirls():
     mc.selectKey(mc.ls(typ = "animCurve"))
     
     # Scale keys from 30FPS to 24FPS. It will use the new time calculations (A, B, C, and D) as the pivot point.
-    mc.scaleKey( scaleSpecifiedKeys = 1, timeScale = tiMul, timePivot = (stFrame), floatScale = tiMul, floatPivot = (stFrame), valueScale =  1, valuePivot = 0)
+    mc.scaleKey(    scaleSpecifiedKeys = 1,
+                    timeScale = tiMul,
+                    timePivot = (stFrame),
+                    floatScale = tiMul,
+                    floatPivot = (stFrame),
+                    valueScale =  1,
+                    valuePivot = 0)
     
-    # Shift all frames to new start time to start at 1009 (assuming 8 frame handles AND start frame 1001. The script will calculate for Frame Length changes approved by production as well)
+    # Shift all frames to new start time to start at 1009 (assuming 8 frame handles AND start frame 1001.
+    # The script will calculate for Frame Length changes approved by production as well)
     e = (mc.playbackOptions( query = 1, min = 1) + 8) - stFrame
     mc.keyframe( animation = 'keys', option = 'over', relative = 1, timeChange = (0 + e))
     
