@@ -73,8 +73,13 @@ def tweakMeToHell():
         
         #...add to list...
         tweakCubeOneArray += [tweakCubeOne]
+        
+        # Group objects beneath their appropriate selected root
+        tweakCubeGroup = mc.group( tweakCubeOne, name = (tweakTarget + '_cleanupCube_group') )
     
     ###end Loop 1
+    
+    
     
     
     
@@ -128,6 +133,11 @@ def tweakMeToHell():
         print tweakCubeThreeList
             
     print tweakCubeThreeList
+    
+    
+    
+    
+    
     # Bake cube3!
     bakeTweaks(tweakCubeThreeList)
     
@@ -159,7 +169,6 @@ def tweakMeToHell():
             # ...do an Orient Constraint!
             except:
                 mc.orientConstraint( tweakCubeThree, tweakTargetArray[i], weight = 1)
-        
     
     '''
     mc.bufferCurve(animation = 'keys', overwrite = 0)
