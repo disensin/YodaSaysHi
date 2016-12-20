@@ -40,22 +40,23 @@ def addLoactorCubes(self):
     for i in range(len(self)):
         if i == 0:
             continue
-        thisGuy = mc.ls(self)[i]
-        mc.select( thisGuy )
-        thisGuyBox = neoCube(thisGuy) # Create follow cube
-        thisGuyBox = mc.rename(thisGuyBox,(thisGuy + '_') + 'modBox') # Rename cube to "targetName_cleanCube"
+        target = mc.ls(self)[i]
+        mc.select( target )
+        targetBox = neoCube(target) # Create follow cube
+        targetBox = mc.rename(targetBox,(target + '_') + 'modBox') # Rename cube to "targetName_cleanCube"
         mc.scale(.05,.3,.05)
         if i == 1:
-            mc.parentConstraint(self[0],thisGuyBox,w=1,mo=1)
+            mc.parentConstraint(self[0],targetBox,w=1,mo=1)
         if i == 2:
             mc.move(0,.2,0,r = 1)
             mc.scale(.05,.05,.05)
-            mc.parentConstraint(thisGuy,thisGuyBox,w=1,mo=1)
+            mc.parentConstraint(target,targetBox,w=1,mo=1)
         if i == 3 or i == 4:
-            mc.parentConstraint(self[2],thisGuyBox,w=1,mo=1)
+            mc.parentConstraint(self[2],targetBox,w=1,mo=1)
         if i == 5:
-            mc.parentConstraint(thisGuy,thisGuyBox,w=1)
-        bakeDems += [thisGuyBox] # Add cube to baking list
+            mc.parentConstraint(target,targetBox,w=1)
+        bakeDems += [targetBox] # Add cube to baking list
+        
     return bakeDems
 
 # Use this to bake anything's T and R
@@ -92,6 +93,8 @@ def bakeOff(self):
 
 ### Main process HERE!!
 bakeCubes = []
+bakeList = []
+
 leftFootItems = addFeetHere('L')
 rightFootItems = addFeetHere('R')
 
@@ -102,6 +105,10 @@ print rightFootItems
 bakeList += addLoactorCubes(leftFootItems)
 bakeList += addLoactorCubes(rightFootItems)
 
-print(bakeList)
+mc.select(bakeList)
+
+bakeOff(bakeList)
 
 #Next up, constrain everything to the foot!!
+
+
