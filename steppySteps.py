@@ -15,13 +15,13 @@ School: CG Society
 # Settings for my stairs
 
 settings = {
-            'degrees':1,
+            'degrees':7,
             'spread':.6,
             'stepHeight':0.5,
             'stepLength':5,
             'stepName':'pasito',
-            'steps':300,
-            'columnWidth':200,
+            'steps':80,
+            'columnWidth':1,
             'railHeight':5
             }
 
