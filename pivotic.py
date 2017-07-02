@@ -15,10 +15,18 @@ class PivotIC(object):
         Initialize the Class variable. In this case, get the selected objects.
         If the selected object already has a Pivot Tool applied on it, load the variables.
         '''
-        if mc.ls(sl=1):
+        if mc.ls(sl=1): # if there's a selection, engage the variables
             self.items = mc.ls(sl=1)
-            print self.items[0]
+            self.pivotList = mc.ls('*_pivotTool_*') # let's find any pivot tools out there...
+            for piv in self.pivotList: # ...and compare the selected object to them all.
+                piv = self.pivotList[0]
+                newGuy = mc.getAttr(piv+'.ItemsInPivotTool')
 
+                if self.items[0] in newGuy.split(): # if the selected object is in one of the pivots
+                    self.items = newGuy.split() # replace list with the original selection order
+                    break
+
+            print self.items
             if mc.ls(self.items[0]+"_pivotTool_*"):
                 self.diamondCtrl = mc.ls(self.items[0]+"_pivotDiamond_*")[0]
                 self.pivotCtrl = mc.ls(self.items[0]+"_pivotCenter_*")[0]
@@ -26,7 +34,10 @@ class PivotIC(object):
                 self.basePivotRef = mc.ls(self.items[0]+"_pivotRef_*")[0]
 
                 self.pivotList = [self.pivotGroup,self.diamondCtrl,self.pivotCtrl,self.basePivotRef]
-                print self.pivotList
+                
+                self.items = mc.getAttr(self.pivotList[0]+'.ItemsInPivotTool').split()
+                print self.pivotList,self.items
+                mc.select(self.pivotList[1])
             else:
                 pass
 
@@ -40,7 +51,7 @@ class PivotIC(object):
         '''
         Returns all the pivots in the list.
         '''
-        self.pivotList = mc.ls('pivotTool_*')
+        self.pivotList = mc.ls('*_pivotTool_*')
         return self.pivotList
 
     def makeNewPivotCtrl(self):
@@ -137,7 +148,8 @@ class PivotIC(object):
             mc.select(cl=1)
             self.snapToFirstItem(self.items[0],controls[0])
 
-            constraint = mc.parentConstraint(controls[3],self.items[0])
+            for item in self.items:
+                constraint = mc.parentConstraint(controls[3],item,mo=1,w=1)
 
             multDivNode = mc.shadingNode('multiplyDivide', asUtility=True)
             mc.connectAttr((controls[2]+'.translate'), (multDivNode+'.input1'),f=1)
@@ -147,18 +159,28 @@ class PivotIC(object):
             mc.connectAttr((multDivNode+'.output'), (controls[3]+'.translate'),f=1)
             mc.connectAttr((controls[2]+'.translate'), (controls[1]+'.rotatePivot'),f=1)
 
+            mc.addAttr(self.pivotList[0],ln="ItemsInPivotTool",dt='string')
+            mc.setAttr((self.pivotList[0]+'.ItemsInPivotTool'), e=1,channelBox=True)
+            writeIn = ''
+            for item in self.items:
+                writeIn += "{0} ".format(item)
+                
+            mc.setAttr((self.pivotList[0]+'.ItemsInPivotTool'),writeIn,type="string")
+
             mc.select(self.pivotList[1])
 
     def setKeyOnMainItem(self):
         '''
         Set a key on the items driven by the objects controlled by the current pivot.
         '''
+        print self.items, "will be key'd"
         mc.setKeyframe(self.items)
         for item in self.items:
             mc.setAttr((item+".blendParent1"), 1)
 
     def removePivotTool(self):
-        pass
+        mc.delete(self.pivotList)
+        print('Tool as been removed!')
 
 
 
