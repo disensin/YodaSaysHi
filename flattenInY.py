@@ -4,6 +4,15 @@ To run, place script in your Scripts folder, then use this code:
 import pivotic
 reload(pivotic)
 
+foo = pivotic.PivotIC()
+foo.createPivot() # This code creates a pivot on the selected item
+
+foo = pivotic.PivotIC()
+foo.setKeyOnMainItem() # This code sets a key on the item that is being controlled
+
+foo = pivotic.PivotIC()
+foo.removePivotTool() # This code removes the pivot tool.
+
 '''
 
 import maya.cmds as mc
@@ -183,5 +192,12 @@ class PivotIC(object):
     def removePivotTool(self):
         mc.delete(self.pivotList)
         print('Tool as been removed!')
+
+        
+
+
+
+
+
 
 
