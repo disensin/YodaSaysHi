@@ -1,93 +1,187 @@
-# Flatten item motion to the ground! Select all the objects you want, and run this bad boy :)
+'''
+To run, place script in your Scripts folder, then use this code:
+
+import pivotic
+reload(pivotic)
+
+'''
+
 import maya.cmds as mc
-import mAnimLib.mConLib
 
-# Creates a new cube and copies the target's rotation order
-def neoCube(target):
-    newCube = mAnimLib.mConLib.createCubeCON()
+class PivotIC(object):
     
-    #...match rotation order...
-    rotOrder = mc.getAttr( str(target + ".rotateOrder"))
-    rotOrderCubeOne = newCube + ".rotateOrder"
-    mc.setAttr( rotOrderCubeOne, rotOrder)
-    return newCube
+    def __init__(self):
+        '''
+        Initialize the Class variable. In this case, get the selected objects.
+        If the selected object already has a Pivot Tool applied on it, load the variables.
+        '''
+        if mc.ls(sl=1): # if there's a selection, engage the variables
+            self.items = mc.ls(sl=1)
+            if mc.ls(self.items[0].split('_pivot')[0]) > 1:
+                self.items = mc.ls(self.items[0].split('_pivot')[0]) 
 
-# Use this to bake anything's T and R
-def bakeOff(self):
-    mc.select(self)
-    mc.refresh(suspend=True)
+            self.pivotList = mc.ls('*_pivotTool_*') # let's find any pivot tools out there...
+            for piv in self.pivotList: # ...and compare the selected object to them all.
+                newGuy = mc.getAttr(piv+'.ItemsInPivotTool').split() + self.pivotList
 
-    # Get all the frames in the scene.
-    startingFrame = mc.playbackOptions( query = 1, min = 1)
-    endingFrame = mc.playbackOptions( query = 1, max = 1)
-    mc.bakeResults( self,
-                    at = ['tx','ty','tz','rx','ry','rz'],
-                    simulation = 1,
-                    time = (startingFrame, endingFrame),
-                    sampleBy = 1,
-                    disableImplicitControl = 1,
-                    preserveOutsideKeys = 1,
-                    sparseAnimCurveBake = 0,
-                    removeBakedAttributeFromLayer = 0,
-                    removeBakedAnimFromLayer = 1,
-                    bakeOnOverrideLayer = 0,
-                    minimizeRotation = 1,
-                    controlPoints = 0,
-                    shape = 1
-                    )
-    mc.filterCurve(f = 'euler')
+                if self.items[0] in newGuy: # if the selected object is in one of the pivots
+                    self.items = newGuy # replace list with the original selection order
+                    break
 
-    # Enable scene refresh :)
-    mc.refresh(suspend=False)
-    mc.refresh(force=True)
+            # print self.items
+            if mc.ls(self.items[0]+"_pivotTool_*"):
+                self.diamondCtrl = mc.ls(self.items[0]+"_pivotDiamond_*")[0]
+                self.pivotCtrl = mc.ls(self.items[0]+"_pivotCenter_*")[0]
+                self.pivotGroup = mc.ls(self.items[0]+"_pivotTool_*")[0]
+                self.basePivotRef = mc.ls(self.items[0]+"_pivotRef_*")[0]
 
-    mc.select(self)
-    mc.delete(cn = 1) # Delete all Constraints
+                self.pivotList = [self.pivotGroup,self.diamondCtrl,self.pivotCtrl,self.basePivotRef]
+                
+                self.items = mc.getAttr(self.pivotList[0]+'.ItemsInPivotTool').split()
+                print self.pivotList,self.items
+                mc.select(self.pivotList[1])
+            else:
+                pass
 
-def forceParent(son,dad):
-    # Parent Target Object to cube3. If a Parent Constraint doesn't work...
-    try:
-        mc.parentConstraint( son, dad, weight = 1)
-    except:
-        # ...it will try a Point Constraint. If THAT doesn't work...
-        try:
-            mc.pointConstraint( son, dad, weight = 1)
-        # ...do an Orient Constraint!
-        except:
-            mc.orientConstraint( son, dad, weight = 1)
+        else:
+            self.pivotGroup,self.diamondCtrl,self.pivotCtrl,self.basePivotRef='','','',''
+            self.pivotList = [self.pivotGroup,self.diamondCtrl,self.pivotCtrl,self.basePivotRef]
 
-bakeList = []
-targetList = mc.ls(sl = 1) # Get selected objects into a list
-print targetList
+    def listScenePivots(self):
+        '''
+        Returns all the pivots in the list.
+        '''
+        self.pivotList = mc.ls('*_pivotTool_*')
+        return self.pivotList
 
-# Create cubes
-for i in range(len(targetList)):
-    target = targetList[i] # Put first item in a variable
-    
-    cleanCube = neoCube(target) # Create follow cube
-    cleanCube = mc.rename(cleanCube,(target + '_') + 'cleanCube') # Rename cube to "targetName_cleanCube"
-    mc.scale(.6,.6,.6)
-    mc.parentConstraint(target,cleanCube,w=1)
-    bakeList += [cleanCube] # Add cube to baking list
-    
-    floorCube = neoCube(target) # Create floor cube
-    floorCube = mc.rename(floorCube,(target + '_') + 'floorCube') # Rename cube to "targetName_floorCube"
-    mc.rotate(rotateXZ = 1) # Reset X and Z rotations to Zero.
-    mc.scale(.8,.8,.8)
-    mc.parentConstraint(target,floorCube, w=1,mo=1,sr=['x','z'],st='y') # Constrain floor cube to stay on the floor while following the target object.
-    bakeList += [floorCube] # Add cube to baking list
-    
-    mc.parent(cleanCube,floorCube)
+    def makeNewPivotCtrl(self):
+        '''
+        Creates the following hierarchy:
+            New Pivot Group
+                New Diamond Control
+                    New Pivot Control
+                        New Pivot Group
 
-bakeOff(bakeList) #Bake all items in bakeOff list.
+        It returns a list with all these items.
+        '''
+        diamondName = self.items[0]+"_pivotDiamond_#"
+        pivotName = self.items[0]+"_pivotCenter_#"
+        pivotGroupName = self.items[0]+"_pivotTool_#"
+        basePivotRefName = self.items[0]+"_pivotRef_#"
 
-# Constrain each target to its assigned cube AND limit Y translation to 0.
-for i in range(len(targetList)):
-    target = targetList[i]
-    cleanCube = bakeList[i*2]
-    print cleanCube
-    forceParent(cleanCube,target)
-    ''' # Enable to limit Y translation!!!
-    minVal = mc.getAttr(str(cleanCube + '.translateY'))
-    mc.transformLimits ( cleanCube, ty = (minVal, 1), ety = (1 ,0))
-    '''
+        self.diamondCtrl = mc.curve(n=diamondName,d=1,p=[ 
+                                    (-1, 0, 0),
+                                    (0 ,0 ,-1),
+                                    (1 ,0 ,0 ),
+                                    (0 ,0 ,1 ),
+                                    (-1, 0, 0),
+                                    (0 ,1 ,0 ),
+                                    (1 ,0 ,0 ),
+                                    (0 ,-1, 0),
+                                    (-1, 0, 0),
+                                    (0 ,-1, 0),
+                                    (0 ,0 ,1 ),
+                                    (0 ,1 ,0 ),
+                                    (0 ,0 ,-1),
+                                    (0 ,-1, 0)],
+                                    k=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+        mc.setAttr(self.diamondCtrl + '.overrideEnabled', 1)
+        mc.setAttr(self.diamondCtrl + '.overrideColor', 6)
+
+        self.pivotCtrl = mc.curve(n=pivotName,d=1,p=[
+                                    (-1,0,0),
+                                    (1,0,0),
+                                    (0,0,0),
+                                    (0,0,-1),
+                                    (0,0,1),
+                                    (0,0,0),
+                                    (0,1,0),
+                                    (0,-1,0),
+                                    (0,0,0),
+                                    (-1,0,0),
+                                    (1,0,0)],
+                                    k=[0,1,2,3,4,5,6,7,8,9,10])
+        mc.setAttr(self.pivotCtrl + '.overrideEnabled', 1)
+        mc.setAttr(self.pivotCtrl + '.overrideColor', 18)
+
+
+        mc.setAttr((self.pivotCtrl+".rx"), lock=True, keyable=False, channelBox=False)
+        mc.setAttr((self.pivotCtrl+".ry"), lock=True, keyable=False, channelBox=False)
+        mc.setAttr((self.pivotCtrl+".rz"), lock=True, keyable=False, channelBox=False)
+
+        self.pivotGroup = mc.group(name=pivotGroupName,em=1)
+
+        self.basePivotRef = mc.group(name=basePivotRefName,em=1)
+
+        mc.parent(self.basePivotRef,self.pivotCtrl)
+        mc.parent(self.pivotCtrl,self.diamondCtrl)
+        mc.parent(self.diamondCtrl,self.pivotGroup)
+
+        self.pivotList = [self.pivotGroup,self.diamondCtrl,self.pivotCtrl,self.basePivotRef]
+
+        return self.pivotList
+
+    def snapToFirstItem(self,fromMe=None,toYou=None):
+        '''
+        Snaps the first selected item to the second item.
+
+        The items are then selected in the same order
+        '''
+
+        if mc.ls(sl=1):
+            fromMe = mc.ls(sl=1)[0]
+            toYou = mc.ls(sl=1)[1]
+        mc.xform(toYou, ro= (mc.xform(fromMe,ro=1,q=1,ws=1)), ws=1)
+        mc.xform(toYou, t= (mc.xform(fromMe,t=1,q=1,ws=1)), ws=1)
+        mc.select(fromMe,toYou)
+
+    def createPivot(self):
+        '''
+        Creates a set of pivot controls for the selected items.
+
+        Selects the movable control that allows positioning.
+        '''
+        if mc.ls(self.items[0]+"_pivotTool_*"):
+            print "This item already has a Pivot Control. Delete it first, then make a new one!"
+        else:
+            self.makeNewPivotCtrl()
+            print self.pivotList[0]
+            print self.items[0]
+            mc.select(cl=1)
+            self.snapToFirstItem(self.items[0],self.pivotList[0])
+
+            for item in self.items:
+                constraint = mc.parentConstraint(self.pivotList[3],item,mo=1,w=1)
+
+            multDivNode = mc.shadingNode('multiplyDivide', asUtility=True)
+            mc.connectAttr((self.pivotList[2]+'.translate'), (multDivNode+'.input1'),f=1)
+            mc.setAttr(multDivNode+".input2Y",-1)
+            mc.setAttr(multDivNode+".input2X",-1)
+            mc.setAttr(multDivNode+".input2Z",-1)
+            mc.connectAttr((multDivNode+'.output'), (self.pivotList[3]+'.translate'),f=1)
+            mc.connectAttr((self.pivotList[2]+'.translate'), (self.pivotList[1]+'.rotatePivot'),f=1)
+
+            mc.addAttr(self.pivotList[0],ln="ItemsInPivotTool",dt='string')
+            mc.setAttr((self.pivotList[0]+'.ItemsInPivotTool'), e=1,channelBox=True)
+            writeIn = ''
+            for item in self.items:
+                writeIn += "{0} ".format(item)
+                
+            mc.setAttr((self.pivotList[0]+'.ItemsInPivotTool'),writeIn,type="string")
+
+            mc.select(self.pivotList[1])
+
+    def setKeyOnMainItem(self):
+        '''
+        Set a key on the items driven by the objects controlled by the current pivot.
+        '''
+        print self.items, "will be key'd"
+        mc.setKeyframe(self.items)
+        for item in self.items:
+            mc.setAttr((item+".blendParent1"), 1)
+
+    def removePivotTool(self):
+        mc.delete(self.pivotList)
+        print('Tool as been removed!')
+
+
