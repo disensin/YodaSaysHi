@@ -194,5 +194,6 @@ class PivotIC(object):
         Removes the Pivot Tool without needing to open the Outliner!
         '''
         mc.delete(self.pivotItems)
+        mc.select(self.items)
         print('Tool as been removed!')
 
