@@ -54,6 +54,51 @@ class PivotIC(object):
         self.pivotList = mc.ls('*_pivotTool_*')
         return self.pivotList
 
+    def makeSplineDiamond(self,name='diamond_spline_#',color=6):
+    	'''
+    	Create a spline Diamond with a blue override color.
+    	'''
+    	splineDiamond = mc.curve(n=name,d=1,p=[ 
+                                    (-1, 0, 0),
+                                    (0 ,0 ,-1),
+                                    (1 ,0 ,0 ),
+                                    (0 ,0 ,1 ),
+                                    (-1, 0, 0),
+                                    (0 ,1 ,0 ),
+                                    (1 ,0 ,0 ),
+                                    (0 ,-1, 0),
+                                    (-1, 0, 0),
+                                    (0 ,-1, 0),
+                                    (0 ,0 ,1 ),
+                                    (0 ,1 ,0 ),
+                                    (0 ,0 ,-1),
+                                    (0 ,-1, 0)],
+                                    k=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+        mc.setAttr(splineDiamond + '.overrideEnabled', 1)
+        mc.setAttr(splineDiamond + '.overrideColor', color)
+        return splineDiamond
+
+    def makeSplineNull(self,name='null_spline_#',color=18):
+    	'''
+    	Create a spline Null with a light blue override color.
+    	'''
+    	splineNull = mc.curve(n=name,d=1,p=[
+                                    (-1,0,0),
+                                    (1,0,0),
+                                    (0,0,0),
+                                    (0,0,-1),
+                                    (0,0,1),
+                                    (0,0,0),
+                                    (0,1,0),
+                                    (0,-1,0),
+                                    (0,0,0),
+                                    (-1,0,0),
+                                    (1,0,0)],
+                                    k=[0,1,2,3,4,5,6,7,8,9,10])
+        mc.setAttr(splineNull + '.overrideEnabled', 1)
+        mc.setAttr(splineNull + '.overrideColor', color)
+        return splineNull
+
     def makeNewPivotCtrl(self):
         '''
         Creates the following hierarchy:
@@ -70,41 +115,11 @@ class PivotIC(object):
         basePivotAnchorName = self.items[0]+"_pivotAnchor_#"
 
         # Create the first control, the Diamond. Apply a blue override color.
-        self.diamondCtrl = mc.curve(n=diamondName,d=1,p=[ 
-                                    (-1, 0, 0),
-                                    (0 ,0 ,-1),
-                                    (1 ,0 ,0 ),
-                                    (0 ,0 ,1 ),
-                                    (-1, 0, 0),
-                                    (0 ,1 ,0 ),
-                                    (1 ,0 ,0 ),
-                                    (0 ,-1, 0),
-                                    (-1, 0, 0),
-                                    (0 ,-1, 0),
-                                    (0 ,0 ,1 ),
-                                    (0 ,1 ,0 ),
-                                    (0 ,0 ,-1),
-                                    (0 ,-1, 0)],
-                                    k=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-        mc.setAttr(self.diamondCtrl + '.overrideEnabled', 1)
-        mc.setAttr(self.diamondCtrl + '.overrideColor', 6)
+        self.diamondCtrl =self.makeSplineDiamond(name=diamondName,color=6)
 
         # Create the second control, the cross. Apply a light blue override color.
-        self.pivotCtrl = mc.curve(n=pivotName,d=1,p=[
-                                    (-1,0,0),
-                                    (1,0,0),
-                                    (0,0,0),
-                                    (0,0,-1),
-                                    (0,0,1),
-                                    (0,0,0),
-                                    (0,1,0),
-                                    (0,-1,0),
-                                    (0,0,0),
-                                    (-1,0,0),
-                                    (1,0,0)],
-                                    k=[0,1,2,3,4,5,6,7,8,9,10])
-        mc.setAttr(self.pivotCtrl + '.overrideEnabled', 1)
-        mc.setAttr(self.pivotCtrl + '.overrideColor', 18)
+        self.pivotCtrl = self.makeSplineNull(name=pivotName,color=18)
+
         # Lock and hide the Rotations of the cross.
         mc.setAttr((self.pivotCtrl+".rx"), lock=True, keyable=False, channelBox=False)
         mc.setAttr((self.pivotCtrl+".ry"), lock=True, keyable=False, channelBox=False)
@@ -196,4 +211,3 @@ class PivotIC(object):
         mc.delete(self.pivotItems)
         mc.select(self.items)
         print('Tool as been removed!')
-
