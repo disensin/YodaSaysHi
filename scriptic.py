@@ -101,3 +101,23 @@ def snapToFirstItem(fromMe=None,toYou=None):
     mc.xform(toYou, ro= (mc.xform(fromMe,ro=1,q=1,ws=1)), ws=1)
     mc.xform(toYou, t= (mc.xform(fromMe,t=1,q=1,ws=1)), ws=1)
     mc.select(fromMe,toYou)
+
+
+def forceParent(dad = mc.ls(sl=1)[0],sons = mc.ls(sl=1)[1:], mOffset = 0):
+    '''
+    Parents all sons onto dad (the first selected item).
+    Will try parent constraint first, then point constraint, then orient constraint.
+    '''
+    
+    # For each child, run the parent command!
+    for son in sons:
+        # Parent Target Object to cube3. If a Parent Constraint doesn't work...
+        try:
+            mc.parentConstraint( dad, son, weight = 1, mo = mOffset)
+        except:
+            # ...it will try a Point Constraint. If THAT doesn't work...
+            try:
+                mc.pointConstraint( dad, son, weight = 1, mo = mOffset)
+            # ...do an Orient Constraint!
+            except:
+                mc.orientConstraint( dad, son, weight = 1, mo = mOffset)
