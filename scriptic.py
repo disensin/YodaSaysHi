@@ -1,8 +1,12 @@
-def matchymatchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1,1]):
+def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1,1]):
     '''
     This function will take an input object and copy the desired rotates or translates
     into the next frame, useful to keep foot on the floor.
     To use on multiple objects, run this in a for loop.
+
+    example:
+    matchFrame(rotates=[1,1,1],translates=[0,1,0])
+        will match all the rotations, and only the Y translate.
 
     items = mc.ls(sl=1)
         use these objects. This function will iterate through a list.
@@ -45,4 +49,55 @@ def matchymatchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translate
         mc.xform(item, ro= (fromFrameRot), ws=1)
         mc.xform(item, t= (fromFrameTra), ws=1)
     
-matchymatchFrame(rotates=[1,1,1],translates=[0,1,0])
+
+def bakeOff(self):
+    '''
+    stops all thebakes all the 'self' items' X Y Z values, then deletes constraints.
+    '''
+    mc.select(self)
+    mc.refresh(suspend=True)
+
+    # Get all the frames in the scene.
+    startingFrame = mc.playbackOptions( query = 1, min = 1)
+    endingFrame = mc.playbackOptions( query = 1, max = 1)
+    mc.bakeResults( self,
+                    at = ['tx','ty','tz','rx','ry','rz'],
+                    simulation = 1,
+                    time = (startingFrame, endingFrame),
+                    sampleBy = 1,
+                    disableImplicitControl = 1,
+                    preserveOutsideKeys = 1,
+                    sparseAnimCurveBake = 0,
+                    removeBakedAttributeFromLayer = 0,
+                    removeBakedAnimFromLayer = 1,
+                    bakeOnOverrideLayer = 0,
+                    minimizeRotation = 1,
+                    controlPoints = 0,
+                    shape = 1
+                    )
+    mc.filterCurve(f = 'euler')
+
+    # Enable scene refresh :)
+    mc.refresh(suspend=False)
+    mc.refresh(force=True)
+
+    mc.select(self)
+    mc.delete(cn = 1) # Delete all Constraints
+
+def snapToFirstItem(fromMe=None,toYou=None):
+    '''
+    INPUT: Snaps the first selected item to the second item. If there's a selection, it'll snap the second object to the first.
+
+    OUTPUT: The items are then selected in the same order.
+
+    fromMe - string item, get the location from this one
+
+    toYou - string item, apply location to this one
+    '''
+
+    if mc.ls(sl=1): # If there's a selection
+        fromMe = mc.ls(sl=1)[0]
+        toYou = mc.ls(sl=1)[1]
+    mc.xform(toYou, ro= (mc.xform(fromMe,ro=1,q=1,ws=1)), ws=1)
+    mc.xform(toYou, t= (mc.xform(fromMe,t=1,q=1,ws=1)), ws=1)
+    mc.select(fromMe,toYou)
