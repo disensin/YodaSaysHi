@@ -427,7 +427,10 @@ def poserLoader(write = False, read = False):
 		with open('poseLoader.json','r') as infile:
 			gotcha = json.load(infile)
 
-		editingThese = gotcha or mc.ls(sl=1)
+		if len(mc.ls(sl=1))>0:
+			editingThese = mc.ls(sl=1)
+		else:
+			editingThese = gotcha.keys()
 
 		for i in editingThese:
 			if i in gotcha.keys():
@@ -467,7 +470,7 @@ def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1
 		fromFrameRot = mc.xform(item,ro=1,q=1,ws=1)
 		fromFrameTra = mc.xform(item,t=1,q=1,ws=1)
 
-		print fromFrameRot, fromFrameTra 
+		print( fromFrameRot, fromFrameTra )
 		mc.currentTime(mc.currentTime(q=1)+direction,e=1)
 
 		nextFrameRot = mc.xform(item,ro=1,q=1,ws=1)
@@ -482,13 +485,14 @@ def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1
 				fromFrameTra[t] = nextFrameTra[t]
 	    
 	    
-		print fromFrameRot, fromFrameTra 
+		print( fromFrameRot, fromFrameTra )
 
 		mc.xform(item, ro= (fromFrameRot), ws=1)
 		mc.xform(item, t= (fromFrameTra), ws=1)
 
 def scaleBB(item):
 	'''Gets the largest side of the current item's Bounding Box.
+	####
 	'''
 	itemBB= mc.xform(item,bb=1,q=1,ws=1)
 	returnSender= 0.0
@@ -510,7 +514,7 @@ def scaleB2A(A=None,B=None):
 	mc.xform(B,scale=[Bfinal]*3)
 	mc.xform(A,bb=1,q=1)
 
-def forceParent(dad = mc.ls(sl=1)[0],sons = mc.ls(sl=1)[1:], mOffset = 0):
+def forceParent(dad = '',sons = [], mOffset = 0):
     '''
     Parents all sons onto dad (the first selected item).
     Will try parent constraint first, then point constraint, then orient constraint.
@@ -520,6 +524,8 @@ def forceParent(dad = mc.ls(sl=1)[0],sons = mc.ls(sl=1)[1:], mOffset = 0):
 	mOffset = False
 
     '''
+    dad = dad or mc.ls(sl=1)[0]
+    sons = sons or mc.ls(sl=1)[1:]
     
     # For each child, run the parent command!
     for son in sons:
@@ -533,3 +539,21 @@ def forceParent(dad = mc.ls(sl=1)[0],sons = mc.ls(sl=1)[1:], mOffset = 0):
             # ...do an Orient Constraint!
             except:
                 mc.orientConstraint( dad, son, weight = 1, mo = mOffset)
+
+def skipFrame(count=None):
+	'''Skip a certain number of frames!
+	count=2 # Change this value to a positive or negative number,
+			# put it on a hot key or your favorite burger!
+	'''
+	count = count or 2
+	mc.currentTime(mc.currentTime(q=1)+count,e=1)
+
+
+
+
+
+
+
+
+
+
