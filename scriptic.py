@@ -304,13 +304,17 @@ def optimizeFBX(selectToDelete=[]):
 										"*:CharacterSpace",
 										"*:jaw_end"]
 
+	deletedItems = []
 	for i in selectToDelete:
 		if mc.ls(i):
 			mc.select(i,add=1)
-
+	
+	deletedItems = mc.ls(sl=1)
 	mc.delete()
 
 	mc.delete(staticChannels = 1, unitlessAnimationCurves = False, hierarchy = 'none', controlPoints = 0)
+
+	mc.warning("Deleted static channels and the following items: ", deletedItems)
 
 def bakeOff(self=[],delCon=0):
 	'''
@@ -547,13 +551,3 @@ def skipFrame(count=None):
 	'''
 	count = count or 2
 	mc.currentTime(mc.currentTime(q=1)+count,e=1)
-
-
-
-
-
-
-
-
-
-
