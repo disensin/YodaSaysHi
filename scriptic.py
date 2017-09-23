@@ -11,7 +11,7 @@ def setColor(self,color = 1):
 	Set the color for the current object.
 
 	self: Object
-	color: Pick a color from 1 to 
+	color: Pick a color from 1 to
 	'''
 	self = self or mc.ls(sl=1)[0]
 	mc.setAttr( self + ".overrideEnabled",1)
@@ -21,18 +21,18 @@ def zeroEm(zeroMe=None,translate = None, rotate = None, scale = None, all = True
 	'''
 	Match the desired transforms from first object to second object.
 	fromMe: Default is first selected item.
-	
+
 	toYou: Default is second selected item.
-	
+
 	translate: Match the translation only. Default is False.
-	
+
 	rotate: Match the rotation only. Default is False.
-	
+
 	scale: Match the scale only. Default is False.
-	
+
 	all: Match all transforms. Default is True.
-	
-	##	
+
+	##
 	'''
 	zeroMe = zeroMe or mc.ls(sl=1)[0]
 	if translate or all: mc.xform(zeroMe,t=([0,0,0]),ws=1)
@@ -43,18 +43,18 @@ def matchEm(fromMe=0,toYou=0,translate = 0, rotate = 0, scale = 0, all = 1):
 	'''
 	Match the desired transforms from first object to second object.
 	fromMe: Default is first selected item.
-	
+
 	toYou: Default is second selected item.
-	
+
 	translate: Match the translation only. Default is False.
-	
+
 	rotate: Match the rotation only. Default is False.
-	
+
 	scale: Match the scale only. Default is False.
-	
+
 	all: Match all transforms. Default is True.
-	
-	##	
+
+	##
 	'''
 	fromMe = fromMe or mc.ls(sl=1)[0]
 	toYou = toYou or mc.ls(sl=1)[1]
@@ -78,15 +78,15 @@ def matchingShape(name="",shapey='diamond',scaleToObject=True):
 		object = mc.ls(sl=1)[0]
 		name = object + "_diamObj"
 	pp,kk,dd = ss.getShape[shapey]
-	
+
 	diamondMe = mc.curve(name = name,p= pp, k=kk, d=dd)
-	
+
 	if mc.ls(sl=1):
 		matchEm(fromMe = object,toYou = diamondMe)
 
 	if scaleToObject:
 		scaleB2A(object,diamondMe)
-	
+
 	return diamondMe
 
 def makeJoint(object=''):
@@ -95,17 +95,17 @@ def makeJoint(object=''):
 	return mc.joint(name = object + '_jnt#',p=(mc.xform(object,t=1,q=1,ws=1)))
 
 def addJointChain(pointers=[]):
-	
+
 	for i in range(len(pointers)+1):
 		mc.parent(i,(i+1))
 
 
 # def IkFkMe(pointers=[],ikAim='',ikDefault = False):
 # 	pointers = pointers or mc.ls(sl=1)
-# 	ikAim = pointers[-1] or 
+# 	ikAim = pointers[-1] or
 # 	pointerJoints = [makeJoint(i) for i in pointers]
 # 	addJointChain(pointers)
-	
+
 # 	mc.parent(pointerJoints[1],pointerJoints[0])
 # 	mc.parent(pointerJoints[2],pointerJoints[1])
 # 	mc.joint(pointerJoints,edit=1,orientJoint = 'xyz', children = True, zeroScaleOrient = True)
@@ -296,25 +296,43 @@ def optimizeFBX(selectToDelete=[]):
 	selectToDelete = [ "*:JustRig" ] # Use quotations and * as a wild-card.
 	'''
 	mc.select(clear=1)
-	selectToDelete = selectToDelete or ["*:JustRig",
-										"*:*multiConnect",
-										"*:head_end",
-										"*:blends",
-										"*:eyeAimMain",
-										"*:CharacterSpace",
-										"*:jaw_end"]
+	selectToDelete = selectToDelete or ["JustRig",
+										"*multiConnect",
+										"head_end",
+										"blends",
+										"eyeAimMain",
+										"CharacterSpace",
+										"jaw_end"]
 
 	deletedItems = []
 	for i in selectToDelete:
 		if mc.ls(i):
 			mc.select(i,add=1)
-	
+		elif mc.ls("*:"+i):
+			mc.select("*:"+i,add=1)
+
 	deletedItems = mc.ls(sl=1)
 	mc.delete()
 
-	mc.delete(staticChannels = 1, unitlessAnimationCurves = False, hierarchy = 'none', controlPoints = 0)
+	mc.delete(staticChannels=1,all=1)
 
-	mc.warning("Deleted static channels and the following items: ", deletedItems)
+	ommitChannels = [
+						'translateX',
+						'translateY',
+						'translateZ',
+						'rotateX',
+						'rotateY',
+						'rotateZ'
+					]
+
+	mc.select('*:mainGroup',hierarchy=True)
+
+	start,stop = startStopFrames()
+
+	mc.setKeyframe(time=start,attribute=ommitChannels)
+	mc.setKeyframe(time=stop,attribute=ommitChannels)
+
+	mc.warning("Deleted static channels, set book-end keys on everything and the following items: ", deletedItems)
 
 def bakeOff(self=[],delCon=0):
 	'''
@@ -324,7 +342,7 @@ def bakeOff(self=[],delCon=0):
 	delCon = 0 # Deletes constraints after it is done baking.
 	'''
 	mc.warning("Baking, please wait . . .")
-	
+
 	self = self or mc.ls(sl=1)
 
 	mc.select(self)
@@ -332,7 +350,7 @@ def bakeOff(self=[],delCon=0):
 
 	# Get all the frames in the scene.
 	StEn = startStopFrames()
-	mc.bakeResults(self, 
+	mc.bakeResults(self,
 			sparseAnimCurveBake=False,
 			minimizeRotation=True,
 			removeBakedAttributeFromLayer=False,
@@ -390,7 +408,7 @@ def bakeShape(constrainToSelected=0):
 
 
 	mc.select(bakedList)
-	
+
 def IkFk():
 	iKfKbake = {'switch':"*:shoulder_L_FKIK_Switch",
 				'ik':['*:shoulder_L_IK_PoleVector','*:hand_L_IK_Handle_control'],
@@ -447,7 +465,7 @@ def poserLoader(write = False, read = False):
 
 	mc.error("You must enable either read or write.")
 
-def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1,1]):
+def matchFrame(items = None,direction=1, rotates=[1,1,1], translates=[1,1,1]):
 	'''
 	This function will take an input object and copy the desired rotates or translates
 	into the next frame, useful to keep foot on the floor.
@@ -465,10 +483,10 @@ def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1
 	    input a list of the channels to hold on to. 1 will apply the new value, 0 will maintain the old value.
 	'''
 
+	items = items or mc.ls(sl=1)
+
 	if not items:
 		mc.error("Select something first.")
-		
-	items = items or mc.ls(sl=1)
 
 	for item in items:
 		fromFrameRot = mc.xform(item,ro=1,q=1,ws=1)
@@ -483,12 +501,12 @@ def matchFrame(items = mc.ls(sl=1),direction=1, rotates=[1,1,1], translates=[1,1
 		for r in range(len(rotates)):
 			if not rotates[r]:
 				fromFrameRot[r] = nextFrameRot[r]
-		        
+
 		for t in range(len(translates)):
 			if not translates[t]:
 				fromFrameTra[t] = nextFrameTra[t]
-	    
-	    
+
+
 		print( fromFrameRot, fromFrameTra )
 
 		mc.xform(item, ro= (fromFrameRot), ws=1)
@@ -530,7 +548,7 @@ def forceParent(dad = '',sons = [], mOffset = 0):
     '''
     dad = dad or mc.ls(sl=1)[0]
     sons = sons or mc.ls(sl=1)[1:]
-    
+
     # For each child, run the parent command!
     for son in sons:
         # Parent Target Object to cube3. If a Parent Constraint doesn't work...
