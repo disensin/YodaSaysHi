@@ -19,18 +19,18 @@ def setColor(self,color = 1):
 
 def zeroEm(zeroMe=None,translate = None, rotate = None, scale = None, all = True):
 	'''
-	Match the desired transforms from first object to second object.
+	Zero the desired transforms of the first object.
 	fromMe: Default is first selected item.
 
 	toYou: Default is second selected item.
 
-	translate: Match the translation only. Default is False.
+	translate: Zero the translation only. Default is False.
 
-	rotate: Match the rotation only. Default is False.
+	rotate: Zero the rotation only. Default is False.
 
-	scale: Match the scale only. Default is False.
+	scale: Zero the scale only. Default is False.
 
-	all: Match all transforms. Default is True.
+	all: Zero all transforms. Default is True.
 
 	##
 	'''
@@ -86,6 +86,14 @@ def matchingShape(name="",shapey='diamond',scaleToObject=True):
 
 	if scaleToObject:
 		scaleB2A(object,diamondMe)
+
+	if mc.getAttr(name + '.scaleX') < 0.01:
+		# print 'dang, that's one tiny shape'
+		mc.setAttr(name + '.scaleX',0.1)
+		mc.setAttr(name + '.scaleY',0.1)
+		mc.setAttr(name + '.scaleZ',0.1)
+
+	mc.makeIdentity(diamondMe,apply=1,scale=1)
 
 	return diamondMe
 
@@ -316,23 +324,26 @@ def optimizeFBX(selectToDelete=[]):
 
 	mc.delete(staticChannels=1,all=1)
 
-	ommitChannels = [
+	keyChannels = [
 						'translateX',
 						'translateY',
 						'translateZ',
 						'rotateX',
 						'rotateY',
-						'rotateZ'
+						'rotateZ',
+						'scaleX',
+						'scaleY',
+						'scaleZ'
 					]
 
 	mc.select('*:mainGroup',hierarchy=True)
 
 	start,stop = startStopFrames()
 
-	mc.setKeyframe(time=start,attribute=ommitChannels)
-	mc.setKeyframe(time=stop,attribute=ommitChannels)
+	mc.setKeyframe(time=start,attribute=keyChannels)
+	mc.setKeyframe(time=stop,attribute=keyChannels)
 
-	mc.warning("Deleted static channels, set book-end keys on everything and the following items: ", deletedItems)
+	mc.warning("Deleted static channels, set book-end keys on everything, and the following items were deleted: ", deletedItems)
 
 def bakeOff(self=[],delCon=0):
 	'''
@@ -350,6 +361,7 @@ def bakeOff(self=[],delCon=0):
 
 	# Get all the frames in the scene.
 	StEn = startStopFrames()
+
 	mc.bakeResults(self,
 			sparseAnimCurveBake=False,
 			minimizeRotation=True,
@@ -374,14 +386,22 @@ def bakeOff(self=[],delCon=0):
 	if delCon:
 		mc.delete(self,cn = 1) # Delete all Constraints
 
-	mc.warning("Done baking!!!")
+	mc.warning('The range {} has been baked!'.format(StEn))
 
 def startStopFrames():
-	''' Returns a list with the start and end frames.
-	[ 0.0 , 125.0 ]
+	''' Returns a list with the start and end frames. It will prioritize range highlight first.
+
+	Returns the frame range as a list with two floats.
+	example: [ 0.0 , 125.0 ]
 	####
 	'''
-	return [mc.playbackOptions(q=1,min=1),mc.playbackOptions(q=1,max=1)]
+	timeSlide = mel.eval('$tmpVar=$gPlayBackSlider')
+	selectedRange = mc.timeControl(timeSlide,rangeArray=True,q=1)
+
+	if selectedRange[1] - selectedRange[0] == 1:
+		selectedRange = [mc.playbackOptions(q=True,min=True),mc.playbackOptions(q=True,max=True)]
+
+	return selectedRange
 
 def bakeShape(constrainToSelected=0):
 	'''
@@ -524,15 +544,16 @@ def scaleBB(item):
 			returnSender = itemBB[3+i]-itemBB[i]
 	return returnSender
 
-def scaleB2A(A=None,B=None):
-	'''Scales incoming B item to match A item, plus 80% larger.
+def scaleB2A(A=None,B=None,scaleValue=1.7):
+	'''Scales incoming B item to match A item, plus 70% larger.
 	A,B = mc.ls(sl=1) # A is object 1, B is object 2.
+	scaleValue = 1.7 # Scales the matching item up 70%.
 	'''
 	A,B = A,B or mc.ls(sl=1)
 	Alargest,Blargest = scaleBB(A),scaleBB(B)
 	differenceBB = Alargest/Blargest
 	BoldScale = mc.xform(B,scale=1,q=1,r=1)[0]
-	Bfinal = BoldScale*differenceBB*1.7
+	Bfinal = BoldScale*differenceBB*scaleValue
 	mc.xform(B,scale=[Bfinal]*3)
 	mc.xform(A,bb=1,q=1)
 
@@ -544,7 +565,8 @@ def forceParent(dad = '',sons = [], mOffset = 0):
 	dad = selectedItems[0] # will use the first item as the parent.
 	sons = selectedItems[1:] # will use from the second object onward.
 	mOffset = False
-
+	
+	#
     '''
     dad = dad or mc.ls(sl=1)[0]
     sons = sons or mc.ls(sl=1)[1:]
@@ -569,3 +591,24 @@ def skipFrame(count=None):
 	'''
 	count = count or 2
 	mc.currentTime(mc.currentTime(q=1)+count,e=1)
+
+def freezeWithGroup(item = None):
+	'''Freeze the selected item with by creating an empty group,
+	match the incoming item's TRS, parent the new group under the item's original parent,
+	and parenting the item under the group.
+
+	item = None # Input the item you'd like to perform this action on!
+	'''
+	item = item or mc.ls(sl=1)[0] # Get the item
+
+	mainParent = mc.listRelatives(item, allParents=1)[0] # Get the item's parent
+
+	newGroup = mc.group(name=(item + '_null'),empty=1) # Make an empty group
+
+	matchEm(item,newGroup) # Match the new group to the item
+
+	mc.makeIdentity(newGroup,apply=1,scale=1) # Freeze the new group's scale
+
+	mc.parent(item,newGroup)
+
+	mc.parent(newGroup,mainParent)
