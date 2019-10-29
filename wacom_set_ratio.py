@@ -2,6 +2,12 @@
 Created by: Isai Calderon
 October 25, 2019
 Version 1.0.0
+
+function wacom_ratio() {
+ python /folder/containg/python/file/wacom_set_ratio.py "$@";
+}
+
+
 """
 import os
 import sys
