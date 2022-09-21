@@ -1,0 +1,755 @@
+'''
+The tool will automatically look for all Selection Sets called `*:export_anim`
+
+Before running the tool, check that the frame-range in the shot is correct.
+
+To run this script, place this script in your Scripts folder,
+then run the following Python:
+
+import fbx_asset_export as fae;
+fae.export_assets_now(selection_sets=None,
+                      check_duplicates = True,
+                      test_range=False,
+                      prefix=None,
+                      force_set_flag= False)
+
+
+
+'''
+
+from maya import cmds as mc
+from pymel import all as pm
+from pprint import pprint
+import json
+import os
+
+JSON_DATA_DEFAULTS = {
+    'custom_exportSetIndex':3,
+    'custom_exportTypeIndex':2,
+    'custom_fileSplitType':2,
+    'custom_modelFileMode':1,
+    'custom_moveToOrigin':False,
+    'custom_upAxis':2,
+    'custom_animClips__animClipSrcNode':'None',
+    'custom_animClips__exportAnimClip':True,
+    'custom_animClips__animClipId':0,
+    }
+
+
+def get_shot_folder():
+    this_path = mc.file(q=1,sceneName=1)
+    if not this_path:
+        pm.error("A valid Luka Scene was not opened. Open a shot before running this tool!")
+
+    split_path = os.path.normpath(this_path).split(os.path.sep)
+    # split_path = this_path.split(os.sep)
+
+    found_index = [f for f in enumerate(split_path) if 'Animation' in f]
+    found_path = os.sep.join(split_path[:found_index[0][0]+2])
+    shot_name = split_path[found_index[0][0]+2]
+    return found_path,shot_name
+
+def get_ue_shot_folder():
+    # this_file_path = mc.workspace(q=1,directory=1)
+    # this_file_path = mc.file(q=1,sceneName=1)
+    this_file_path,shot_name = get_shot_folder()
+    # shot_name = get_shot_folder(this_file_path)
+    
+    ue_parent_folder = os.sep.join(this_file_path.split(os.sep)+['UE Exports'])
+    export_folder = os.path.join(ue_parent_folder,shot_name)
+    if not os.path.isdir(export_folder):
+        pm.error('Filepath does not exist!',export_folder)
+    return shot_name,export_folder
+    # for folder in os.listdir(ue_parent_folder):
+    #     if shot_name == folder:
+    #         return shot_name,os.path.join(ue_parent_folder,shot_name)
+    # return False
+
+def get_fbx_export_settings_folder():
+    project_directory = mc.workspace(q=1,active=1)
+    directory_path = os.path.join(project_directory, '1_Assets', 'Tools','scripts')
+    return directory_path
+
+def _get_file(directory_path,file_name, extension='json', make_file=False):
+    for this_file in os.listdir(directory_path):
+        if this_file.startswith(file_name) and this_file.endswith('.'+extension):
+            return os.path.join(directory_path,this_file)
+    
+    if make_file:
+        file_path = os.path.join(directory_path,file_name+'.'+extension)
+        return _write_json(file_path,{})
+    
+    pm.error('FBX Export settings not detected.'
+            'Check for the file here:\n'+os.path.join(directory_path,file_name+'.'+extension))
+
+     
+
+def _get_json_file():
+    directory_path = get_fbx_export_settings_folder()
+    file_name = 'fbx_export_settings'
+    json_path = _get_file(directory_path,file_name)
+    return json_path
+
+
+def _write_json(file_path,control_dict):
+    with open(file_path,'w') as outfile:
+        outfile.write(json.dumps(control_dict, indent=4))
+    return file_path
+
+def _read_json(file_path):
+    with open(file_path,'r') as open_file:
+        json_dict = json.load(open_file)
+    return json_dict
+
+
+def _get_json_log():
+    directory_path = get_fbx_export_settings_folder()
+    file_name = 'fbx_export_log'
+    json_path = _get_file(directory_path,file_name, make_file=True)
+    return json_path
+
+def _get_csv_log():
+    directory_path = get_fbx_export_settings_folder()
+    file_name = 'fbx_export_csv_log'
+    csv_path = _get_file(directory_path,file_name, extension='csv', make_file=True)
+    return csv_path
+
+
+def convert_json_to_csv():
+    import csv
+    directory_path = get_fbx_export_settings_folder()
+    csv_file_path = os.path.join(directory_path,'fbx_export_csv_log.csv')
+
+    json_file = _get_json_log()
+    json_dict = _read_json(json_file)
+
+    list_of_dicts = []
+    list_of_keys = set()
+    for date_time in sorted(json_dict.keys(), reverse=1):
+        entry_dict = json_dict[date_time]
+        csv_dict = entry_dict.copy()
+        # csv_dict.keys()
+        csv_dict['timestamp'] = date_time
+        list_of_keys.update(set(csv_dict.keys()))
+        list_of_dicts += [csv_dict]
+        
+    list_of_keys = sorted(list_of_keys,reverse=True)
+    
+    with open(csv_file_path,'w') as csv_file:
+        # fieldnames = ['first_name', 'last_name']
+        for kwarg_dict,values in json_dict.items():
+            kwarg_dict,values
+        
+        writer = csv.DictWriter(csv_file, fieldnames=list_of_keys)
+        writer.writeheader()
+        writer.writerows(list_of_dicts)
+
+# def _write_json(file_path,control_dict):
+#     with open(file_path,'w') as outfile:
+#         outfile.write(json.dumps(control_dict, indent=4))
+#     return file_path
+
+# def _read_json(file_path):
+#     with open(file_path,'r') as open_file:
+#         json_dict = json.load(open_file)
+#     return json_dict
+
+
+
+# # json_fbxExport_data = _get_json_file()
+# directory_path = get_fbx_export_settings_folder()
+# file_name = 'fbx_export_settings'
+# file_path = os.path.join(directory_path,file_name+'.json')
+
+# _write_json(file_path,{})
+# # shot_number,file_path = get_ue_shot_folder()
+# _write_json(_get_json_file(),json_fbxExport_data)
+# # _read_json(_get_json_file())
+
+def get_json_data():
+    return _read_json(_get_json_file())
+
+# fbx_dict = get_json_data()
+# fbx_dict.setdefault("json_prefix",'')
+# fbx_dict
+# _write_json(_get_json_file(),fbx_dict)
+
+def compile_final_path(file_path,this_name,shot_number):
+    return os.path.join(file_path,this_name+'_'+shot_number+'.fbx')
+
+def fill_settings_game_exporter(shot_number,file_path,this_name,
+                                min_time,max_time,sel_set,
+                                custom_animClips__animClipId,
+                                custom_animClips__animClipSrcNode,
+                                custom_animClips__exportAnimClip,
+                                custom_exportSetIndex,
+                                custom_exportTypeIndex,
+                                custom_fileSplitType,
+                                custom_modelFileMode,
+                                custom_moveToOrigin,
+                                custom_upAxis,
+                                json_prefix,
+                                *args,**kwargs):
+    pm.mel.eval('gameFbxExporter')
+
+    pm.PyUI('gameExporterWindow|gameExporterTabFormLayout|gameExporterTabLayout').setSelectTabIndex(2)
+    pm.mel.eval('gameExp_CurrentTabChanged();gameExp_UpdatePrefix;gameExp_PopulatePresetList();'
+                'gameExp_CreateExportTypeUIComponents();')
+    exporter_node = get_exporter_node()
+    
+    pm.mel.eval('gameExp_CurrentTabChanged();gameExp_UpdatePrefix;gameExp_PopulatePresetList();'
+                'gameExp_CreateExportTypeUIComponents();')
+        
+    # JSON Attributes
+    exporter_node.exportSetIndex.set(custom_exportSetIndex) # 2 == Set to Export Selection
+    exporter_node.selectionSetName.set(sel_set.name()) # Use WITH .exportSetIndex == 3
+    
+    exporter_node.exportTypeIndex.set(custom_exportTypeIndex)
+    exporter_node.fileSplitType.set(custom_fileSplitType)
+    exporter_node.modelFileMode.set(custom_modelFileMode)
+    exporter_node.moveToOrigin.set(custom_moveToOrigin)
+    exporter_node.upAxis.set(custom_upAxis) # 2 == Set to Z
+    exporter_node.animClips[0].animClipSrcNode.set(custom_animClips__animClipSrcNode)
+    exporter_node.animClips[0].exportAnimClip.set(custom_animClips__exportAnimClip)
+    exporter_node.animClips[0].animClipId.set(custom_animClips__animClipId)
+    # json_prefix = json_prefix
+    # if json_prefix and not json_prefix.endswith('_'): json_prefix += '_'
+    
+    # Per-asset Attributes
+    exporter_node.animClips[0].animClipName.set(shot_number)
+    exporter_node.animClips[0].animClipStart.set(min_time)
+    exporter_node.animClips[0].animClipEnd.set(max_time)
+    pm.mel.eval('gameExp_CreateExportTypeUIComponents()')
+    exporter_node.exportFilename.set(json_prefix+this_name)
+    exporter_node.exportPath.set(file_path)
+
+    pm.mel.eval('gameExp_CurrentTabChanged();gameExp_UpdatePrefix;gameExp_PopulatePresetList();'
+                'gameExp_CreateExportTypeUIComponents();')
+    
+
+def run_exporter():
+    pm.mel.eval(THIS_MEL_COMMAND) # Create custom DoExport command
+    # pm.mel.eval('gameExp_DoExport();') # Original Export Command
+    pm.mel.eval('NEW_gameExp_DoExport();') # Modified Export Command
+    
+
+def _build_kwargs(jFbxData,
+                  sel_set,
+                  shot_number,
+                  file_path,
+                  min_time,
+                  max_time,
+                  test_range,
+                  prefix):
+    kwargs_dict = jFbxData
+    kwargs_dict['sel_set'] = sel_set
+    this_namespace = sel_set.parentNamespace()
+    this_name = this_namespace.split('_')[1]
+
+    # up_axis = 2 # 1 == Y, 2 == Z
+
+    kwargs_dict['shot_number'] = shot_number
+    kwargs_dict['file_path'] = file_path
+    kwargs_dict['source_file_path'] = mc.file(q=1,sceneName=1)
+    
+
+    if test_range:
+        max_time = 1010
+        this_name += '_TEST'
+    
+    this_name = prefix+this_name
+    
+    kwargs_dict['this_name'] = this_name+'_'
+        
+    kwargs_dict['min_time'] = min_time
+    kwargs_dict['max_time'] = max_time
+
+    file_name = compile_final_path(file_path,this_name,shot_number)
+    return kwargs_dict,file_name
+
+def _build_args_list(selection_sets = None,
+                     test_range=False,
+                     prefix=None, 
+                     jFbxData = None, 
+                     force_set_flag = False,
+                     custom_path = None,
+                     frame_range = None):
+    
+    if force_set_flag and not selection_sets:
+        pm.error('A selection set was not given.')
+    
+    found_sets = selection_sets or pm.ls("*:export_anim")
+    
+    jFbxData = jFbxData or get_json_data() or JSON_DATA_DEFAULTS
+    overriding_assets = []
+    kwargs_lists = []
+
+    prefix = prefix or jFbxData['json_prefix'] or ''
+    if prefix:
+        if not prefix.endswith('_'):
+            prefix += '_'
+        
+    min_time = pm.playbackOptions(q=1,minTime=1)
+    max_time = pm.playbackOptions(q=1,maxTime=1)
+    if frame_range:
+        min_time,max_time = frame_range
+
+    shot_number,file_path = get_ue_shot_folder()
+    if custom_path:
+        file_path = custom_path
+    kwargs_dict = {}
+    for sel_set in found_sets:
+        kwargs_dict = {}
+        kwargs_dict,file_name = _build_kwargs(jFbxData,
+                                              sel_set,
+                                              shot_number,
+                                              file_path,
+                                              min_time,
+                                              max_time,
+                                              test_range,
+                                              prefix)
+        kwargs_lists.append(kwargs_dict.copy())
+        
+        if os.path.isfile(file_name):
+            overriding_assets += [kwargs_dict['this_name']]
+        
+    return kwargs_lists,overriding_assets
+
+def export_assets_now(selection_sets=None,
+                      check_duplicates = True,
+                      test_range=False,
+                      prefix=None,
+                      force_set_flag= False,
+                      custom_path = None,
+                      frame_range = None,
+                      from_ui=False,
+                      print_kwargs_only = False):
+    kwargs_lists,overriding_assets = _build_args_list(selection_sets = selection_sets,
+                                                      test_range = test_range,
+                                                      prefix = prefix,
+                                                      force_set_flag = force_set_flag,
+                                                      custom_path = custom_path,
+                                                      frame_range = frame_range)
+    if print_kwargs_only:
+        pprint(kwargs_lists)
+        return kwargs_lists
+    
+    dialog_result = None
+
+    pre_min_time = pm.playbackOptions(q=1,minTime=1)
+    pre_max_time = pm.playbackOptions(q=1,maxTime=1)
+    if overriding_assets and check_duplicates:
+        dialog_result = pm.confirmDialog( title='The following files will be overriden',
+                                        message='\n'.join(overriding_assets),
+                                        button=['Yes','No'], defaultButton='Yes', 
+                                        cancelButton='No', dismissString='No' )
+    if dialog_result == "No":
+        pm.error('User Cancelled.')
+    
+    for kwargs in kwargs_lists:
+        fill_settings_game_exporter(**kwargs)
+        run_exporter()
+        write_json_log(kwargs)
+
+    convert_json_to_csv()
+    
+    pm.warning('DONE! Exported:\n'+'\n'.join([k['sel_set'].name() for k in kwargs_lists]))
+    
+    pm.playbackOptions(e=1,minTime=pre_min_time)
+    pm.playbackOptions(e=1,maxTime=pre_max_time)
+    
+def write_json_log(kwargs):
+        from datetime import datetime
+        # log_prep = {}
+        export_timestamp = datetime.now()
+
+        json_log_filepath = _get_json_log()
+        current_log = _read_json(json_log_filepath)
+        nkwargs = kwargs.copy()
+        if kwargs['sel_set']:
+            print kwargs['sel_set'],type(kwargs['sel_set'])
+        nkwargs['sel_set'] = kwargs['sel_set'].name()
+        current_log.setdefault(str(export_timestamp),nkwargs)
+        
+        # print kwargs['sel_set'],type(kwargs['sel_set'])
+        pprint(kwargs)
+        # current_log.update(log_prep)
+        
+        _write_json(json_log_filepath,current_log)
+
+def get_exporter_node():
+    pm.mel.eval('gameFbxExporter')
+    return pm.PyNode(pm.mel.eval('$temp=$gGameFbxExporterCurrentNode;'))
+
+def search_for_string(this_string):
+    this_path = '/Applications/Autodesk/maya2019/Maya.app/Contents/scripts/others/'
+    all_game_files = [f for f in os.listdir(this_path) if f.startswith('game')]
+    for game_file in all_game_files:
+        with open(os.path.join(this_path,game_file),'r') as this_file:
+            for num,this_line in enumerate(this_file.readlines()):
+                if this_string in this_line:
+                    print game_file,num,this_line
+
+class StoredUI:
+    check_boxes = None
+    frameRange_layout = None
+    start_frame_field = None
+    end_frame_field = None
+    set_range_button = None
+    this_path = None
+    destination_field = None
+    options_ui = None
+    check_duplicate_checkbox = None
+    run_test_checkbox = None
+    prefix_textfield = None
+    diagnostic_button = None
+    export_button = None
+
+
+def make_export_ui():
+    found_sets = pm.ls("*:export_anim")
+
+    StoredUI.this_path = get_ue_shot_folder()[-1]
+    StoredUI.check_boxes = []
+
+    this_title = 'ExportTheseSets'
+    if pm.window(this_title,exists=1,q=1):
+        pm.deleteUI(this_title)
+    
+
+    # if pre_min_time != animStart_time or pre_max_time != animEnd_time:
+        
+    
+    with pm.window(this_title,title='Export These Sets',width=275):
+        with pm.columnLayout(columnAlign='center',columnAttach=['left',2]):
+            
+            pm.separator(height=15)
+            with pm.columnLayout():            
+                pm.text('Luka FBX Exporter!', font='fixedWidthFont', align='center', width=275)
+            
+            pm.separator(height=15)
+            with pm.frameLayout("Select Sets to Export",width=275):
+                
+                with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[.6]*3):
+                    for found_set in found_sets:
+                        pm.separator(width=5,style='none')
+                        StoredUI.check_boxes.append(pm.checkBox(found_set,
+                                                                changeCommand=pm.Callback(checkbox_toggles,StoredUI)))
+                        
+            pm.separator(height=5)
+            # with pm.frameLayout("Frame Range", borderVisible=1,width=275, labelVisible=False) as StoredUI.options_ui:
+            with pm.rowColumnLayout(numberOfColumns=7,width=275) as StoredUI.frameRange_layout:
+                pm.separator(width=5,style='none')
+                pm.text("Frame Range: ")
+                StoredUI.start_frame_field = pm.textField(width=50, changeCommand=pm.Callback(set_range,StoredUI))
+                pm.text(" - ")                    
+                StoredUI.end_frame_field = pm.textField(width=50, changeCommand=pm.Callback(set_range,StoredUI))
+                pm.text(" ")
+                StoredUI.set_range_button = pm.button('Set Range',
+                                                      command = pm.Callback(set_frame_range,
+                                                                            StoredUI),
+                                                      annotation='If RED, Frame Range is not set to Full.',
+                                                      width=65)
+                        
+            pm.separator(height=5)
+            with pm.frameLayout("Destination Folder",width=275,borderVisible=0):
+                with pm.rowColumnLayout(numberOfColumns=3):#,backgroundColor=[0.7]*3):
+                    pm.separator(width=5,style='none')
+                    StoredUI.destination_field = pm.textField('Final Path',
+                                                              text=StoredUI.this_path,
+                                                              enable=True,
+                                                              width=200)
+                    pm.button('Browse',command=pm.Callback(set_new_path,StoredUI))
+                    pm.separator(width=2,style='none')
+                    pm.button('Reset Path',command=pm.Callback(reset_path,StoredUI),width=100)
+                    # print_kwargs_only(StoredUI)
+            pm.separator(height=5)
+            with pm.frameLayout("More Options", collapsable=1, borderVisible=0,width=275) as StoredUI.options_ui:
+                
+                with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[0.7]*3):
+                    pm.separator(width=5,style='none')
+                    
+                    with pm.columnLayout():
+                        StoredUI.check_duplicate_checkbox = pm.checkBox('Check Duplicates',value=True)
+                        StoredUI.run_test_checkbox = pm.checkBox('Run Test',
+                                                                 annotation= 'Exports 10 frames, adds "_TEST_" string',
+                                                                 changeCommand=pm.Callback(set_frame_range,StoredUI))
+                        with pm.rowColumnLayout(numberOfColumns=3):
+                            pm.text("Use Prefix: ")
+                            StoredUI.prefix_textfield = pm.textField('Prefix')
+                            pm.text(" _assetName")
+                        StoredUI.diagnostic_button = pm.button('Print Diagnostics',
+                                                               command=pm.Callback(print_kwargs_only,StoredUI),
+                                                               annotation = 'Check Sets ON to enable this button')
+                             
+            pm.separator(height=10)
+
+            StoredUI.export_button = pm.button('Export Checked',
+                                               command = pm.Callback(run_export_from_ui,StoredUI),
+                                               width=275,
+                                               annotation = 'Check Sets ON to enable this button')
+            checkbox_toggles(StoredUI)
+            pm.separator(height=10)
+    set_frame_range(StoredUI)
+    StoredUI.options_ui.setCollapse(True)
+
+# StoredUI.frameRange_layout.setEnable(False)
+
+def checkbox_toggles(StoredUI):
+    current_state = len(get_enabled_checkboxes(StoredUI))
+    # if get_enabled_checkboxes(StoredUI):
+    StoredUI.export_button.setEnable(current_state)
+    StoredUI.diagnostic_button.setEnable(current_state)
+
+    # else:
+    #     StoredUI.export_button.setEnable(False)
+    #     StoredUI.diagnostic_button.setEnable(False)
+
+def set_range(StoredUI):
+    pm.playbackOptions(e=1,minTime=float(StoredUI.start_frame_field.getText()))
+    pm.playbackOptions(e=1,maxTime=float(StoredUI.end_frame_field.getText()))
+    # StoredUI.start_frame = float(StoredUI.start_frame_field.getText())
+    # StoredUI.end_frame = float(StoredUI.end_frame_field.getText())
+    set_frame_range(StoredUI)
+
+
+def set_frame_range(StoredUI):
+    StoredUI.start_frame = pm.playbackOptions(q=1,minTime=1)
+    StoredUI.end_frame = pm.playbackOptions(q=1,maxTime=1)
+    animStart_time = pm.playbackOptions(q=1,animationStartTime=1)
+    animEnd_time = pm.playbackOptions(q=1,animationEndTime=1)
+
+    if StoredUI.run_test_checkbox.getValue():
+        StoredUI.start_frame = animStart_time
+        StoredUI.end_frame = animStart_time + 10.0
+        StoredUI.frameRange_layout.setEnable(False)
+    else:
+        StoredUI.frameRange_layout.setEnable(True)
+    
+    StoredUI.start_frame_field.setText(str(StoredUI.start_frame))
+    StoredUI.end_frame_field.setText(str(StoredUI.end_frame))
+
+    # print 'UI Color',StoredUI.options_ui.getBackgroundColor()
+    if StoredUI.start_frame != animStart_time or StoredUI.end_frame != animEnd_time:
+        StoredUI.set_range_button.noBackground(1) # Disabled Grey
+        StoredUI.set_range_button.setBackgroundColor([1,0,0]) # Red
+
+        # StoredUI.options_ui.setEnableBackground(1)
+        # StoredUI.options_ui.setBackgroundColor([1,0,0])
+    else:
+        
+        # StoredUI.options_ui.setBackgroundColor([0.4]*3)
+        # StoredUI.options_ui.setEnableBackground(0)
+        
+        StoredUI.set_range_button.setBackgroundColor([0,0,0])
+        StoredUI.set_range_button.noBackground(0) # Disabled Grey
+    
+
+def reset_path(StoredUI):
+    StoredUI.this_path = get_ue_shot_folder()[-1]
+    StoredUI.destination_field.setText(StoredUI.this_path)    
+
+def set_new_path(StoredUI):
+    new_path = browse_custom_path(starting_directory=StoredUI.this_path)
+    if new_path:
+        StoredUI.this_path = new_path[0]
+        StoredUI.destination_field.setText(StoredUI.this_path)
+
+def browse_custom_path(starting_directory=None):
+    return pm.fileDialog2(fileMode=2,startingDirectory=starting_directory) or False
+
+def get_enabled_checkboxes(StoredUI):
+    selected_sets = []
+    for check_box in StoredUI.check_boxes:
+        if check_box.getValue():
+            selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
+    return selected_sets
+
+def run_export_from_ui(StoredUI):
+
+    selected_sets = get_enabled_checkboxes(StoredUI)
+    
+    custom_path = StoredUI.this_path
+
+    export_assets_now(selection_sets = selected_sets,
+                    check_duplicates = StoredUI.check_duplicate_checkbox.getValue(),
+                    test_range = StoredUI.run_test_checkbox.getValue(),
+                    prefix = StoredUI.prefix_textfield.getText(),
+                    force_set_flag = True,
+                    custom_path = custom_path,
+                    frame_range = [StoredUI.start_frame , StoredUI.end_frame],
+                    from_ui = True,)
+
+def print_kwargs_only(StoredUI):
+
+    selected_sets = []
+    for check_box in StoredUI.check_boxes:
+        if check_box.getValue():
+            selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
+
+    custom_path = StoredUI.this_path
+
+    export_assets_now(selection_sets = selected_sets,
+                    check_duplicates = StoredUI.check_duplicate_checkbox.getValue(),
+                    test_range = StoredUI.run_test_checkbox.getValue(),
+                    prefix = StoredUI.prefix_textfield.getText(),
+                    force_set_flag = True,
+                    custom_path = custom_path,
+                    frame_range = [StoredUI.start_frame , StoredUI.end_frame],
+                    from_ui = True,
+                    print_kwargs_only = True)
+                    
+
+THIS_MEL_COMMAND ='''
+global proc NEW_gameExp_DoExport()
+{    
+    global string $gGameFbxExporterCurrentNode;
+    
+    // In order to trigger the changeCommand callback of a textField
+    // the text field needs to be out of focus but by clicking on a button
+    // the focus it not changed so I'm forcing it here to be sure that
+    // the callback is called and my values are all set.
+    
+    string $gameExporterPresetList = gameExp_GetPrefixedName("gameExporterPresetList"); 
+    setFocus $gameExporterPresetList;      
+           
+    string $dir = `getAttr($gGameFbxExporterCurrentNode + ".exportPath")`;
+    string $file = `getAttr($gGameFbxExporterCurrentNode + ".exportFilename")`;
+       
+    int $exportType = `getAttr($gGameFbxExporterCurrentNode + ".exportTypeIndex")`; 
+    int $splitType = `getAttr ($gGameFbxExporterCurrentNode + ".fileSplitType")`;   
+    int $singleFileOut = ($splitType == 1) ? true : false;
+    int $modelFileMode = 1;
+    int $moveToOrigin = 0;
+
+    if ($exportType == 1)
+    {
+        $modelFileMode = `getAttr ($gGameFbxExporterCurrentNode + ".modelFileMode")`;
+        $singleFileOut = ($modelFileMode==1) ? true : false;    
+    }
+    $moveToOrigin = `getAttr($gGameFbxExporterCurrentNode + ".moveToOrigin")`;
+
+      
+    // add extension if not added
+    if(fileExtension(basename($file,"")) == "")
+    {
+        $file = ($file + ".fbx");
+    }
+    
+    string $exportFilePath = ($dir + "/" + $file);
+             
+    string $presetPath = (gameExp_GetFbxExportPresetDirectory() + "/" + gameExp_GetFbxPresetForExportType());
+        
+    FBXPushSettings;   
+    FBXLoadExportPresetFile -f $presetPath;
+
+    gameExp_SetFbxPropertiesWithAttributes(); 
+    
+    string $exportSelectionFlag = "";
+    string $oldSelection[];
+    
+    // 1- Export All, 2- Export Selected, 3- Export Selection Set
+    int $exportSetIndex = `getAttr($gGameFbxExporterCurrentNode + ".exportSetIndex")`;
+    if($exportSetIndex > 1)
+    {
+        $exportSelectionFlag = "-s"; 
+        
+        $oldSelection = `ls -selection`;   
+
+
+    
+        if($exportSetIndex == 3)
+        {
+            string $selectionSetName = `getAttr($gGameFbxExporterCurrentNode + ".selectionSetName")`;
+            if(size($selectionSetName))
+            {                
+                select -replace $selectionSetName;
+            }
+        }
+    }
+    
+    $exportType = `getAttr($gGameFbxExporterCurrentNode + ".exportTypeIndex")`;    
+    if ($exportType == 2 || $exportType == 3)
+    {
+        print "Exporting Type";
+        // Export animations or clips.
+        FBXExportSplitAnimationIntoTakes -clear;         
+        int $nbAnimClips = `getAttr -size ($gGameFbxExporterCurrentNode + ".animClips")`;
+        
+        
+        if(!gameExp_SetBakeAnimStartEnd())
+        {
+            return;
+        }       
+        
+        float $originalT[];
+        float $originalR[];
+        string $roots[];
+        if ($moveToOrigin)
+        {
+            gameExp_GetRoots($roots);
+            gameExp_MoveToOrigin($originalT, $originalR, $roots);
+        }
+        
+        string $name[];
+        float  $start[], $end[];
+        string $fileNameTmp =  `substitute "\.fbx$" $exportFilePath ""`;
+        string $fileNameList[] = gameExp_GenerateClipFilenameList($nbAnimClips, $fileNameTmp, $name, $start, $end);
+        
+        for($i=0; $i < size($fileNameList); $i++ )
+        {
+            FBXExportSplitAnimationIntoTakes -v $name[$i] $start[$i] $end[$i];  
+            
+            if($splitType == 2)
+            {     
+                // Animation Clips Export, Multiple Clip Files               
+				if(catch(`gameExp_FBXExport $exportSelectionFlag $fileNameList[$i]`))       
+				{
+					// An error occured, move back from origin is required then return.
+					if ($moveToOrigin)
+                    {
+                        gameExp_MoveBackFromOrigin($originalT, $originalR, $roots);
+                    }
+					return;
+				}                
+                // Keep the last one exported to view in the FBX Review
+                $exportFilePath = $fileNameList[$i];
+            }
+        }
+        
+        if($splitType == 1)
+        {              
+            // Animation Clips Export, Multiple Clips to Single File            
+			if(catch(`gameExp_FBXExport $exportSelectionFlag $exportFilePath`))
+			{
+				// An error occured, move back from origin is required then return.
+				if ($moveToOrigin)
+                {
+                    gameExp_MoveBackFromOrigin($originalT, $originalR, $roots);
+                }
+				return;
+			}                                       
+        }    
+
+	    if ($moveToOrigin)
+        {
+            gameExp_MoveBackFromOrigin($originalT, $originalR, $roots);
+        }
+
+	}
+    
+       
+    if(size($oldSelection))
+    {
+        select -replace $oldSelection;
+    }
+    else
+    {
+        select -clear;
+    }
+    
+    FBXPopSettings;     
+    
+}'''
+
+
