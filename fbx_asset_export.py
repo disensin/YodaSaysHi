@@ -13,8 +13,6 @@ fae.export_assets_now(selection_sets=None,
                       prefix=None,
                       force_set_flag= False)
 
-
-
 '''
 
 from maya import cmds as mc
@@ -22,6 +20,41 @@ from pymel import all as pm
 from pprint import pprint
 import json
 import os
+
+def os_split_path(this_path):
+    return os.path.normpath(this_path).split(os.path.sep)
+
+def debug_get_shot_folder():
+    pm.warning('Start Debug...')
+    error_message = "No path detected. Open a Shot file saved in the Box Drive Project."
+    this_path = mc.file(q=1,sceneName=1) or error_message
+    print 'Scene Path:',this_path
+    
+    if this_path == error_message:
+        pm.error(error_message)
+
+    split_path = os_split_path(this_path)
+
+    found_index = [f for f in enumerate(split_path) if 'Animation' in f]
+    print 'Animation Directory Index:',found_index
+    
+    if not all(i in split_path for i in ['4_Production','5_Shots','Animation']):
+        pm.error('Directory Error! Make sure the Maya file is saved in the correct Box Shot Directory.\n'
+                 'Contact Isai Calderon for further help!')
+    
+    if not found_index:
+        pm.error('"Animation" directory not found!')
+    
+    found_path = os.sep.join(split_path[:found_index[0][0]+2])
+    print 'Target Path:',found_path
+    
+    shot_name = split_path[found_index[0][0]+2]
+    print 'Shot Name:',shot_name
+    
+    pm.warning('...Target Filepath looks good!')
+    
+    return found_path,shot_name
+
 
 JSON_DATA_DEFAULTS = {
     'custom_exportSetIndex':3,
@@ -34,15 +67,16 @@ JSON_DATA_DEFAULTS = {
     'custom_animClips__exportAnimClip':True,
     'custom_animClips__animClipId':0,
     }
-
+###### Functional Code
+def os_split_path(this_path):
+    return os.path.normpath(this_path).split(os.path.sep)
 
 def get_shot_folder():
     this_path = mc.file(q=1,sceneName=1)
     if not this_path:
         pm.error("A valid Luka Scene was not opened. Open a shot before running this tool!")
 
-    split_path = os.path.normpath(this_path).split(os.path.sep)
-    # split_path = this_path.split(os.sep)
+    split_path = os_split_path(this_path)
 
     found_index = [f for f in enumerate(split_path) if 'Animation' in f]
     found_path = os.sep.join(split_path[:found_index[0][0]+2])
@@ -50,20 +84,13 @@ def get_shot_folder():
     return found_path,shot_name
 
 def get_ue_shot_folder():
-    # this_file_path = mc.workspace(q=1,directory=1)
-    # this_file_path = mc.file(q=1,sceneName=1)
     this_file_path,shot_name = get_shot_folder()
-    # shot_name = get_shot_folder(this_file_path)
-    
-    ue_parent_folder = os.sep.join(this_file_path.split(os.sep)+['UE Exports'])
+
+    ue_parent_folder = os.sep.join(os_split_path(this_file_path)+['UE Exports'])
     export_folder = os.path.join(ue_parent_folder,shot_name)
     if not os.path.isdir(export_folder):
         pm.error('Filepath does not exist!',export_folder)
     return shot_name,export_folder
-    # for folder in os.listdir(ue_parent_folder):
-    #     if shot_name == folder:
-    #         return shot_name,os.path.join(ue_parent_folder,shot_name)
-    # return False
 
 def get_fbx_export_settings_folder():
     project_directory = mc.workspace(q=1,active=1)
@@ -81,8 +108,6 @@ def _get_file(directory_path,file_name, extension='json', make_file=False):
     
     pm.error('FBX Export settings not detected.'
             'Check for the file here:\n'+os.path.join(directory_path,file_name+'.'+extension))
-
-     
 
 def _get_json_file():
     directory_path = get_fbx_export_settings_folder()
@@ -115,7 +140,7 @@ def _get_csv_log():
     return csv_path
 
 
-def convert_json_to_csv():
+def convert_json_to_csv(get_path = False):
     import csv
     directory_path = get_fbx_export_settings_folder()
     csv_file_path = os.path.join(directory_path,'fbx_export_csv_log.csv')
@@ -128,7 +153,6 @@ def convert_json_to_csv():
     for date_time in sorted(json_dict.keys(), reverse=1):
         entry_dict = json_dict[date_time]
         csv_dict = entry_dict.copy()
-        # csv_dict.keys()
         csv_dict['timestamp'] = date_time
         list_of_keys.update(set(csv_dict.keys()))
         list_of_dicts += [csv_dict]
@@ -136,13 +160,15 @@ def convert_json_to_csv():
     list_of_keys = sorted(list_of_keys,reverse=True)
     
     with open(csv_file_path,'w') as csv_file:
-        # fieldnames = ['first_name', 'last_name']
         for kwarg_dict,values in json_dict.items():
             kwarg_dict,values
         
         writer = csv.DictWriter(csv_file, fieldnames=list_of_keys)
         writer.writeheader()
         writer.writerows(list_of_dicts)
+    if get_path:
+        print csv_file_path
+        return csv_file_path
 
 # def _write_json(file_path,control_dict):
 #     with open(file_path,'w') as outfile:
@@ -244,7 +270,9 @@ def _build_kwargs(jFbxData,
     kwargs_dict = jFbxData
     kwargs_dict['sel_set'] = sel_set
     this_namespace = sel_set.parentNamespace()
-    this_name = this_namespace.split('_')[1]
+    this_name = this_namespace
+    if this_namespace.lower().startswith('rig_'):
+        this_name = '_'.join(this_namespace.split('_')[1:])
 
     # up_axis = 2 # 1 == Y, 2 == Z
 
@@ -359,23 +387,18 @@ def export_assets_now(selection_sets=None,
     pm.playbackOptions(e=1,maxTime=pre_max_time)
     
 def write_json_log(kwargs):
-        from datetime import datetime
-        # log_prep = {}
-        export_timestamp = datetime.now()
+    from datetime import datetime
+    export_timestamp = datetime.now()
 
-        json_log_filepath = _get_json_log()
-        current_log = _read_json(json_log_filepath)
-        nkwargs = kwargs.copy()
-        if kwargs['sel_set']:
-            print kwargs['sel_set'],type(kwargs['sel_set'])
-        nkwargs['sel_set'] = kwargs['sel_set'].name()
-        current_log.setdefault(str(export_timestamp),nkwargs)
-        
-        # print kwargs['sel_set'],type(kwargs['sel_set'])
-        pprint(kwargs)
-        # current_log.update(log_prep)
-        
-        _write_json(json_log_filepath,current_log)
+    json_log_filepath = _get_json_log()
+    current_log = _read_json(json_log_filepath)
+    nkwargs = kwargs.copy()
+    nkwargs['sel_set'] = kwargs['sel_set'].name()
+    current_log.setdefault(str(export_timestamp),nkwargs)
+    
+    pprint(kwargs)
+    
+    _write_json(json_log_filepath,current_log)
 
 def get_exporter_node():
     pm.mel.eval('gameFbxExporter')
@@ -389,7 +412,9 @@ def search_for_string(this_string):
             for num,this_line in enumerate(this_file.readlines()):
                 if this_string in this_line:
                     print game_file,num,this_line
+########################
 
+############ UI Code
 class StoredUI:
     check_boxes = None
     frameRange_layout = None
@@ -409,16 +434,17 @@ class StoredUI:
 def make_export_ui():
     found_sets = pm.ls("*:export_anim")
 
-    StoredUI.this_path = get_ue_shot_folder()[-1]
+    try:
+        StoredUI.this_path = get_ue_shot_folder()[-1]
+    except:
+        debug_get_shot_folder()
     StoredUI.check_boxes = []
 
     this_title = 'ExportTheseSets'
     if pm.window(this_title,exists=1,q=1):
         pm.deleteUI(this_title)
     
-
     # if pre_min_time != animStart_time or pre_max_time != animEnd_time:
-        
     
     with pm.window(this_title,title='Export These Sets',width=275):
         with pm.columnLayout(columnAlign='center',columnAttach=['left',2]):
@@ -478,9 +504,18 @@ def make_export_ui():
                             pm.text("Use Prefix: ")
                             StoredUI.prefix_textfield = pm.textField('Prefix')
                             pm.text(" _assetName")
-                        StoredUI.diagnostic_button = pm.button('Print Diagnostics',
-                                                               command=pm.Callback(print_kwargs_only,StoredUI),
-                                                               annotation = 'Check Sets ON to enable this button')
+                        with pm.rowLayout(numberOfColumns=3):
+                            pm.button('Debug',
+                                       command=pm.Callback(debug_get_shot_folder),
+                                       annotation = '(not mandatory) Print out of Directory Detection.')
+                            StoredUI.diagnostic_button = pm.button('Print Diagnostics',
+                                                                   command=pm.Callback(print_kwargs_only,StoredUI),
+                                                                   annotation = '(not mandatory) Show printout of\n'
+                                                                    'the settings that will be used during Export.')
+                            pm.button('Write CSV',
+                                       command=pm.Callback(convert_json_to_csv,get_path=True),
+                                       annotation = '(not mandatory) Write out the current exports to CSV')
+                            
                              
             pm.separator(height=10)
 
@@ -493,25 +528,15 @@ def make_export_ui():
     set_frame_range(StoredUI)
     StoredUI.options_ui.setCollapse(True)
 
-# StoredUI.frameRange_layout.setEnable(False)
-
 def checkbox_toggles(StoredUI):
     current_state = len(get_enabled_checkboxes(StoredUI))
-    # if get_enabled_checkboxes(StoredUI):
     StoredUI.export_button.setEnable(current_state)
     StoredUI.diagnostic_button.setEnable(current_state)
-
-    # else:
-    #     StoredUI.export_button.setEnable(False)
-    #     StoredUI.diagnostic_button.setEnable(False)
 
 def set_range(StoredUI):
     pm.playbackOptions(e=1,minTime=float(StoredUI.start_frame_field.getText()))
     pm.playbackOptions(e=1,maxTime=float(StoredUI.end_frame_field.getText()))
-    # StoredUI.start_frame = float(StoredUI.start_frame_field.getText())
-    # StoredUI.end_frame = float(StoredUI.end_frame_field.getText())
     set_frame_range(StoredUI)
-
 
 def set_frame_range(StoredUI):
     StoredUI.start_frame = pm.playbackOptions(q=1,minTime=1)
