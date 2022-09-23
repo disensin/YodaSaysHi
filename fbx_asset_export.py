@@ -21,9 +21,6 @@ from pprint import pprint
 import json
 import os
 
-def os_split_path(this_path):
-    return os.path.normpath(this_path).split(os.path.sep)
-
 def debug_get_shot_folder():
     pm.warning('Start Debug...')
     error_message = "No path detected. Open a Shot file saved in the Box Drive Project."
@@ -51,6 +48,16 @@ def debug_get_shot_folder():
     shot_name = split_path[found_index[0][0]+2]
     print 'Shot Name:',shot_name
     
+    found_path,shot_name
+    
+    ue_parent_folder = os.sep.join(os_split_path(found_path)+['UE Exports'])
+    export_folder = os.path.join(ue_parent_folder,shot_name)
+    
+    print 'UE Export Path:',export_folder
+    
+    if not os.path.isdir(export_folder):
+        pm.error('Export path not found! Check that it is synced from Box:',export_folder)
+
     pm.warning('...Target Filepath looks good!')
     
     return found_path,shot_name
@@ -89,7 +96,7 @@ def get_ue_shot_folder():
     ue_parent_folder = os.sep.join(os_split_path(this_file_path)+['UE Exports'])
     export_folder = os.path.join(ue_parent_folder,shot_name)
     if not os.path.isdir(export_folder):
-        pm.error('Filepath does not exist!',export_folder)
+        pm.error('Filepath does not exist! Is it synced from BOX?',export_folder)
     return shot_name,export_folder
 
 def get_fbx_export_settings_folder():
@@ -521,22 +528,48 @@ def make_export_ui():
 
             StoredUI.export_button = pm.button('Export Checked',
                                                command = pm.Callback(run_export_from_ui,StoredUI),
-                                               width=275,
-                                               annotation = 'Check Sets ON to enable this button')
+                                               width=275)
             checkbox_toggles(StoredUI)
             pm.separator(height=10)
     set_frame_range(StoredUI)
     StoredUI.options_ui.setCollapse(True)
 
+
 def checkbox_toggles(StoredUI):
     current_state = len(get_enabled_checkboxes(StoredUI))
+
+    this_annotation = 'Check Sets ON to enable this button.'
+    if current_state:
+        this_annotation = 'Assets ready to export!'
+        
     StoredUI.export_button.setEnable(current_state)
+    StoredUI.export_button.setBackgroundColor([0.3]*3)
+    
+    layout_detected = False
+    for check_box in StoredUI.check_boxes:
+        asset_name = check_box.name().split('|')[-1]
+        if 'layout' in asset_name.lower():
+            check_box.setBackgroundColor([0.9,0.9,0])
+            check_box.setAnnotation('Layout assets NOT necessary to Export. Double-check with Adrian.')
+            if check_box.getValue():
+                layout_detected = True
+    
+    if layout_detected:
+        this_annotation += ' Layout assets detected.'
+        StoredUI.export_button.setBackgroundColor([0.9,0.9,0])
+
+        
+    StoredUI.export_button.setAnnotation(this_annotation)
+    StoredUI.export_button.setEnableBackground( layout_detected)
+    
     StoredUI.diagnostic_button.setEnable(current_state)
+
 
 def set_range(StoredUI):
     pm.playbackOptions(e=1,minTime=float(StoredUI.start_frame_field.getText()))
     pm.playbackOptions(e=1,maxTime=float(StoredUI.end_frame_field.getText()))
     set_frame_range(StoredUI)
+
 
 def set_frame_range(StoredUI):
     StoredUI.start_frame = pm.playbackOptions(q=1,minTime=1)
