@@ -26,8 +26,9 @@ def get_if_connected(warp_curve,items):
     Get boolean list of all connections.
     '''
     disconnect_bools = []
-    for item in items:
-        for anim_node in pm.keyframe(item,q=1,name=1):
+    animCurve_nodes = get_animCurve_nodes(items)
+    for anim_node in animCurve_nodes:
+        if warp_curve != anim_node:
             disconnect_bools.append(warp_curve in pm.PyNode(anim_node).inputs())
     return disconnect_bools
 
@@ -44,17 +45,30 @@ def toggle_warp_connection(warp_curve,items,toggle=True,disconnect_attrs=True):
         connect_warp_nodes(warp_curve,items,disconnect_attrs=True)   
     connect_warp_nodes(warp_curve,items,disconnect_attrs=disconnect_attrs)
 
+def get_animCurve_nodes(items):
+    '''
+    Tool to collect all AnimCurves for the incoming items, including Curves in AnimLayers.
+    '''
+    all_animCurve_nodes = []
+    for item in items:
+        all_history = pm.listHistory(item,leaf=False)
+        history_animCurves = pm.ls(all_history,typ='animCurve')
+        for anim_node in history_animCurves:
+            all_animCurve_nodes += [anim_node]
+    return all_animCurve_nodes
+
 def connect_warp_nodes(warp_curve,items,disconnect_attrs=False):
     '''
     Force connection onto all Items in the Set
     '''
-    for item in items:
-        for anim_node in pm.keyframe(item,q=1,name=1):
-            anim_node_py = pm.PyNode(anim_node)
-            if disconnect_attrs:
-                anim_node_py.input.disconnect()
-            elif warp_curve not in anim_node_py.inputs():
-                warp_curve.output>>anim_node_py.input
+    animCurve_nodes = get_animCurve_nodes(items)
+    # for item in items:
+    for anim_node in animCurve_nodes:
+        anim_node_py = pm.PyNode(anim_node)
+        if disconnect_attrs:
+            anim_node_py.input.disconnect()
+        elif warp_curve not in anim_node_py.inputs():
+            warp_curve.output>>anim_node_py.input
 
 def add_to_set(warp_set):
     '''
@@ -130,7 +144,7 @@ class TimeWarp(object):
             # Delete the UI if it exists.
             pm.deleteUI(self.win_name)
         
-        with pm.window(self.win_name):
+        with pm.window(self.win_name, title='TimeWarp Tool!'):
             # store the main Holding Layout
             self.warp_holder_layout = pm.columnLayout()
             with self.warp_holder_layout:
@@ -172,9 +186,11 @@ class TimeWarp(object):
         '''
         new_name = get_new_name()
         if new_name:
+            selected_items = pm.selected()
             # Create a new node, give it the prompted name
             new_warp_curve = new_time_warp(new_name)
             new_warp_set = get_warp_set(new_warp_curve)
+            pm.select(selected_items)
             add_to_set(new_warp_set)
             # Reload the whole UI :)
             self.reload_ui(*args,**kwargs)
@@ -298,12 +314,15 @@ class TimeWarpEntry:
         to reflect the current status. If ONE item is disconnected, it'll reflect this.
         '''
         self.items = self.warp_set.elements()
-        if not self.items:
+        # print len(self.items)
+        
+        found_animCurve_nodes = get_animCurve_nodes(self.items)
+        if not found_animCurve_nodes:
             pm.warning("Set {} has no animated objects! "\
             "Animate items to start Warpin'!".format(self.warp_set))
-            self.toggle_button.setLabel('(Set is empty)')
-            self.toggle_button.setBackgroundColor([0,0,0])
-            self.toggle_button.noBackground(0)
+            self.toggle_button.setLabel('Not Animated')
+            self.toggle_button.setBackgroundColor([1,1,1])
+            # self.toggle_button.noBackground(0)
 
         else:
             self.current_status = all(get_if_connected(self.warp_curve,self.items))
@@ -318,5 +337,3 @@ class TimeWarpEntry:
 def run_it():
     warp_ui = TimeWarp()
     warp_ui.make_ui()
-
-
