@@ -21,6 +21,9 @@ from pprint import pprint
 import json
 import os
 
+FBX_EXPORT_JSON = 'fbx_export_log'
+CSV_EXPORT_LOG_NAME = 'fbx_export_csv_log'
+
 def debug_get_shot_folder():
     pm.warning('Start Debug...')
     error_message = "No path detected. Open a Shot file saved in the Box Drive Project."
@@ -104,15 +107,24 @@ def get_fbx_export_settings_folder():
     directory_path = os.path.join(project_directory, '1_Assets', 'Tools','scripts')
     return directory_path
 
-def _get_file(directory_path,file_name, extension='json', make_file=False):
+def _get_file(directory_path,file_name, extension='json', make_file=False,all_logs=False):
+    # print all_logs
+    found_logs = []
     for this_file in os.listdir(directory_path):
         if this_file.startswith(file_name) and this_file.endswith('.'+extension):
-            return os.path.join(directory_path,this_file)
-    
+            if not all_logs:
+                # print all_logs
+                return os.path.join(directory_path,this_file)
+            # print 'reading: ',os.path.join(directory_path,this_file)
+            found_logs += [os.path.join(directory_path,this_file)]
+    # print found_logs
     if make_file:
         file_path = os.path.join(directory_path,file_name+'.'+extension)
         return _write_json(file_path,{})
-    
+
+    if all_logs:
+        return found_logs
+
     pm.error('FBX Export settings not detected.'
             'Check for the file here:\n'+os.path.join(directory_path,file_name+'.'+extension))
 
@@ -121,7 +133,6 @@ def _get_json_file():
     file_name = 'fbx_export_settings'
     json_path = _get_file(directory_path,file_name)
     return json_path
-
 
 def _write_json(file_path,control_dict):
     with open(file_path,'w') as outfile:
@@ -133,24 +144,34 @@ def _read_json(file_path):
         json_dict = json.load(open_file)
     return json_dict
 
-
-def _get_json_log():
+def _get_json_log(all_logs=False):
     directory_path = get_fbx_export_settings_folder()
-    file_name = 'fbx_export_log'
-    json_path = _get_file(directory_path,file_name, make_file=True)
+    file_name = FBX_EXPORT_JSON
+    json_path = _get_file(directory_path,file_name, make_file=not all_logs, all_logs=all_logs)
     return json_path
+
+def _combine_excess_json_files(*args,**kwargs):
+    all_files = _get_json_log(all_logs=True)
+    parent_file = [a for a in all_files if a.endswith(FBX_EXPORT_JSON+'.json')][0]
+    this_dict = _read_json(parent_file)
+    for this_file in all_files:
+        if this_file != parent_file:
+            this_dict.update(_read_json(this_file))
+
+    _write_json(parent_file,this_dict)
+    print(parent_file)
+    return parent_file
 
 def _get_csv_log():
     directory_path = get_fbx_export_settings_folder()
-    file_name = 'fbx_export_csv_log'
+    file_name = CSV_EXPORT_LOG_NAME
     csv_path = _get_file(directory_path,file_name, extension='csv', make_file=True)
     return csv_path
-
 
 def convert_json_to_csv(get_path = False):
     import csv
     directory_path = get_fbx_export_settings_folder()
-    csv_file_path = os.path.join(directory_path,'fbx_export_csv_log.csv')
+    csv_file_path = os.path.join(directory_path,CSV_EXPORT_LOG_NAME+'.csv')
 
     json_file = _get_json_log()
     json_dict = _read_json(json_file)
@@ -174,7 +195,7 @@ def convert_json_to_csv(get_path = False):
         writer.writeheader()
         writer.writerows(list_of_dicts)
     if get_path:
-        print csv_file_path
+        print(csv_file_path)
         return csv_file_path
 
 # def _write_json(file_path,control_dict):
@@ -245,6 +266,11 @@ def fill_settings_game_exporter(shot_number,file_path,this_name,
     exporter_node.animClips[0].animClipSrcNode.set(custom_animClips__animClipSrcNode)
     exporter_node.animClips[0].exportAnimClip.set(custom_animClips__exportAnimClip)
     exporter_node.animClips[0].animClipId.set(custom_animClips__animClipId)
+    clip_num = pm.getAttr(exporter_node.animClips,size=1)
+    if clip_num > 1:
+        for num in range(1,clip_num):
+            exporter_node.animClips[num].exportAnimClip.set(False)
+    
     # json_prefix = json_prefix
     # if json_prefix and not json_prefix.endswith('_'): json_prefix += '_'
     
@@ -276,6 +302,12 @@ def _build_kwargs(jFbxData,
                   prefix):
     kwargs_dict = jFbxData
     kwargs_dict['sel_set'] = sel_set
+    
+    base_node_parent,base_node = get_parent_and_world(sel_set)
+    kwargs_dict['base_node_parent'] = base_node_parent
+    kwargs_dict['base_node'] = base_node
+    
+    
     this_namespace = sel_set.parentNamespace()
     this_name = this_namespace
     if this_namespace.lower().startswith('rig_'):
@@ -289,7 +321,7 @@ def _build_kwargs(jFbxData,
     
 
     if test_range:
-        max_time = 1010
+        max_time = min_time + 10
         this_name += '_TEST'
     
     this_name = prefix+this_name
@@ -300,6 +332,8 @@ def _build_kwargs(jFbxData,
     kwargs_dict['max_time'] = max_time
 
     file_name = compile_final_path(file_path,this_name,shot_number)
+    kwargs_dict['file_name'] = this_name+'_'+shot_number+'.fbx'
+
     return kwargs_dict,file_name
 
 def _build_args_list(selection_sets = None,
@@ -314,6 +348,7 @@ def _build_args_list(selection_sets = None,
         pm.error('A selection set was not given.')
     
     found_sets = selection_sets or pm.ls("*:export_anim")
+    
     
     jFbxData = jFbxData or get_json_data() or JSON_DATA_DEFAULTS
     overriding_assets = []
@@ -383,7 +418,18 @@ def export_assets_now(selection_sets=None,
     
     for kwargs in kwargs_lists:
         fill_settings_game_exporter(**kwargs)
+    
+        base_node_parent = kwargs['base_node_parent']
+        base_node = kwargs['base_node']
+
+        if base_node_parent != 'world':
+            base_node.setParent(world=True)
+        
         run_exporter()
+        
+        if base_node_parent != 'world':
+            base_node.setParent(base_node_parent)
+        
         write_json_log(kwargs)
 
     convert_json_to_csv()
@@ -392,7 +438,25 @@ def export_assets_now(selection_sets=None,
     
     pm.playbackOptions(e=1,minTime=pre_min_time)
     pm.playbackOptions(e=1,maxTime=pre_max_time)
+
+def get_parent_and_world(selection_set):
+    if not selection_set.elements():
+        pm.error('This set is blank: '+selection_set.name())
     
+    found_element = selection_set.elements()[0]
+    # found_element.name(long=1).split()
+
+    base_node = found_element
+    for parent_node in pm.pickWalk(found_element,direction='up',recurse=1):
+        if pm.PyNode(parent_node).isReferenced():
+            base_node = pm.PyNode(parent_node)
+    
+    base_node_parent = base_node.getParent() or 'world'
+    # if base_node_parent != 'world':
+    #     base_node.setParent(world=True)
+    return base_node_parent,base_node
+
+
 def write_json_log(kwargs):
     from datetime import datetime
     export_timestamp = datetime.now()
@@ -400,7 +464,13 @@ def write_json_log(kwargs):
     json_log_filepath = _get_json_log()
     current_log = _read_json(json_log_filepath)
     nkwargs = kwargs.copy()
-    nkwargs['sel_set'] = kwargs['sel_set'].name()
+    for this_key,this_value in nkwargs.items():
+        if 'pymel' in str(type(this_value)):
+            nkwargs[this_key] = this_value.name()
+            
+    # nkwargs['sel_set'] = kwargs['sel_set'].name()
+    # nkwargs['sel_set'] = kwargs['sel_set'].name()
+    # nkwargs['sel_set'] = kwargs['sel_set'].name()
     current_log.setdefault(str(export_timestamp),nkwargs)
     
     pprint(kwargs)
@@ -420,6 +490,7 @@ def search_for_string(this_string):
                 if this_string in this_line:
                     print game_file,num,this_line
 ########################
+
 
 ############ UI Code
 class StoredUI:
@@ -459,7 +530,7 @@ def make_export_ui():
             pm.separator(height=15)
             with pm.columnLayout():            
                 pm.text('Luka FBX Exporter!', font='fixedWidthFont', align='center', width=275)
-            
+                # pm.button('Refresh')
             pm.separator(height=15)
             with pm.frameLayout("Select Sets to Export",width=275):
                 
@@ -519,10 +590,17 @@ def make_export_ui():
                                                                    command=pm.Callback(print_kwargs_only,StoredUI),
                                                                    annotation = '(not mandatory) Show printout of\n'
                                                                     'the settings that will be used during Export.')
-                            pm.button('Write CSV',
-                                       command=pm.Callback(convert_json_to_csv,get_path=True),
-                                       annotation = '(not mandatory) Write out the current exports to CSV')
-                            
+                            write_to_csv_button = pm.button('Write CSV',
+                                                           command=pm.Callback(convert_json_to_csv,get_path=True),
+                                                           annotation = '(not mandatory) Write out the current exports to CSV')
+                            # self.this_text = pm.text(self.warp_curve.name(),align='left',width=100,
+                            #          annotation='Right Click for options!')
+                            # Create a popup menu
+                            this_popup = pm.popupMenu()
+                            # Renaming both the Warp node and its set
+                            pm.menuItem('Combine duplicate JSON',parent=this_popup,
+                                        command = _combine_excess_json_files,
+                                        annotation='Find and combine excess JSON files.')
                              
             pm.separator(height=10)
 
@@ -549,7 +627,7 @@ def checkbox_toggles(StoredUI):
     for check_box in StoredUI.check_boxes:
         asset_name = check_box.name().split('|')[-1]
         if 'layout' in asset_name.lower():
-            check_box.setBackgroundColor([0.9,0.9,0])
+            check_box.setBackgroundColor([0.6,0.6,0])
             check_box.setAnnotation('Layout assets NOT necessary to Export. Double-check with Adrian.')
             if check_box.getValue():
                 layout_detected = True
@@ -624,11 +702,13 @@ def get_enabled_checkboxes(StoredUI):
     return selected_sets
 
 def run_export_from_ui(StoredUI):
+    original_selection = pm.selected()
 
     selected_sets = get_enabled_checkboxes(StoredUI)
     
     custom_path = StoredUI.this_path
 
+    
     export_assets_now(selection_sets = selected_sets,
                     check_duplicates = StoredUI.check_duplicate_checkbox.getValue(),
                     test_range = StoredUI.run_test_checkbox.getValue(),
@@ -638,8 +718,10 @@ def run_export_from_ui(StoredUI):
                     frame_range = [StoredUI.start_frame , StoredUI.end_frame],
                     from_ui = True,)
 
-def print_kwargs_only(StoredUI):
+    pm.select(original_selection)
 
+def print_kwargs_only(StoredUI):
+    original_selection = pm.selected()
     selected_sets = []
     for check_box in StoredUI.check_boxes:
         if check_box.getValue():
@@ -656,7 +738,9 @@ def print_kwargs_only(StoredUI):
                     frame_range = [StoredUI.start_frame , StoredUI.end_frame],
                     from_ui = True,
                     print_kwargs_only = True)
-                    
+
+    pm.select(original_selection)
+    
 
 THIS_MEL_COMMAND ='''
 global proc NEW_gameExp_DoExport()
