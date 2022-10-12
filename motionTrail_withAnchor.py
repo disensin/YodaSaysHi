@@ -18,15 +18,23 @@ def get_tracked_node(select=False):
 
 def get_tracker_node(delete=False, select=False):
     if pm.objExists(TRACKER_NAME):
+        trail_shape = pm.PyNode(TRACKER_NAME).outputs()[0]
         if delete:
-            pm.delete(TRACKER_NAME+'Handle')
-            return False
+            found_attrs = {}
+            for attr in trail_shape.listAttr():
+                try:
+                    attr.set(attr.get())
+                    found_attrs[attr.longName()] = attr.get()
+                except:
+                    pass
+            pm.delete(trail_shape.getTransform())
+            return found_attrs
         if select:
-            pm.PyNode(TRACKER_NAME+'Handle').select()
-        return TRACKER_NAME+'Handle'
+            trail_shape.getTransform().select()
+        return False
     
 
-def make_tracker_node(items = None):
+def make_tracker_node(items = None, use_camera_anchor = True):
     items = items or pm.selected()
     this_camera = _get_camera()
 
@@ -34,13 +42,26 @@ def make_tracker_node(items = None):
         pm.error('Select an object first!')
 
     item = items[0]
-    get_tracker_node(delete=True)
+    found_attrs = get_tracker_node(delete=True) or {}
 
-    motion_path  = pm.snapshot(item,
+    this_anchor = None
+    if use_camera_anchor:
+        this_anchor = this_camera.getTransform()
+
+    motion_path = pm.snapshot(item,
                     name=TRACKER_NAME,
                     motionTrail=1,
-                    anchorTransform=this_camera.getTransform(),
+                    anchorTransform=this_anchor,
                     increment=1,
                     startTime = pm.playbackOptions(q=1,min=1),
                     endTime = pm.playbackOptions(q=1,max=1))
+    handle_shape = motion_path[0].getShape()
+    for attr,new_value in found_attrs.items():
+        if hasattr(handle_shape,attr):
+            try:
+                handle_shape.attr(attr).set(new_value)
+                # print "success: ",attr
+            except:
+                pass
+    pm.select(item)
     return motion_path
