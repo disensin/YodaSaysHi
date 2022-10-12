@@ -18,7 +18,7 @@ def get_tracked_node(select=False):
 
 def get_tracker_node(delete=False, select=False):
     if pm.objExists(TRACKER_NAME):
-        trail_shape = pm.PyNode(TRACKER_NAME).outputs()[0]
+        trail_shape = pm.PyNode(TRACKER_NAME).outputs()[0].getShape()
         if delete:
             found_attrs = {}
             for attr in trail_shape.listAttr():
@@ -60,7 +60,6 @@ def make_tracker_node(items = None, use_camera_anchor = True):
         if hasattr(handle_shape,attr):
             try:
                 handle_shape.attr(attr).set(new_value)
-                # print "success: ",attr
             except:
                 pass
     pm.select(item)
