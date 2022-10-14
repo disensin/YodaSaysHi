@@ -31,38 +31,40 @@ def get_if_connected(warp_curve,animCurve_nodes):
             disconnect_bools.add(warp_curve in pm.PyNode(anim_node).inputs())
     return disconnect_bools
 
-def toggle_warp_connection(warp_curve,items,toggle=True,disconnect_attrs=True):  
+def toggle_warp_connection(warp_curve,animCurve_nodes,toggle=True,disconnect_attrs=True):  
     '''
     Toggle Connection based on whether ANY item is (not) connected
     '''
     disconnect_attrs = True
-    
+    animCurve_nodes = animCurve_nodes or []
     if toggle:
-        animCurve_nodes = get_animCurve_nodes(items)
         disconnect_attrs = any(get_if_connected(warp_curve,animCurve_nodes))
     
     if not disconnect_attrs:
-        connect_warp_nodes(warp_curve,items,disconnect_attrs=True)   
-    connect_warp_nodes(warp_curve,items,disconnect_attrs=disconnect_attrs)
+        connect_warp_nodes(warp_curve,animCurve_nodes,disconnect_attrs=True)   
+    connect_warp_nodes(warp_curve,animCurve_nodes,disconnect_attrs=disconnect_attrs)
     return disconnect_attrs
 
-def get_animCurve_nodes(items):
+def get_animCurve_nodes(items,get_items=False):
     '''
     Tool to collect all AnimCurves for the incoming items, including Curves in AnimLayers.
     '''
     all_animCurve_nodes = []
+    found_items = set()
     for item in items:
         all_history = pm.listHistory(item,leaf=False)
         history_animCurves = pm.ls(all_history,typ='animCurve')
         for anim_node in history_animCurves:
             all_animCurve_nodes += [anim_node]
+            found_items.add(item)
+    if get_items:
+        return found_items
     return all_animCurve_nodes
 
-def connect_warp_nodes(warp_curve,items,disconnect_attrs=False):
+def connect_warp_nodes(warp_curve,animCurve_nodes,disconnect_attrs=False):
     '''
     Force connection onto all Items in the Set
     '''
-    animCurve_nodes = get_animCurve_nodes(items)
     for anim_node in animCurve_nodes:
         anim_node_py = pm.PyNode(anim_node)
         if anim_node_py != warp_curve:
@@ -77,8 +79,23 @@ def add_to_set(warp_set):
     '''
     items = pm.selected()
     for item in items:
-        if pm.nodeType(item) != 'animCurveTT':
+        if not item.type() == 'animCurveTT':
             warp_set.add(item)
+            
+        else:
+            if item == get_warp_node(warp_set):
+                pm.error('TimeWarp node {} cannot be parent of itself.'.format(item))
+                
+            elif not check_warpNode_set_parentage(item,warp_set):
+                warp_set.add(item)
+            
+            else:
+                pm.error('TimeWarp node {} cannot be parent of a child TimeWarp {}.'.format(item,get_warp_node(warp_set)))
+
+def check_warpNode_set_parentage(warp_node,this_set):
+    item_set = get_warp_set(warp_node,create=False)
+    parent_warp = get_warp_node(this_set)
+    return pm.sets(item_set,isMember=parent_warp)
 
 def remove_from_set(warp_curve,warp_set):
     '''
@@ -86,21 +103,36 @@ def remove_from_set(warp_curve,warp_set):
     Remove selected items from the given set
     '''
     items = pm.selected()
-    connect_warp_nodes(warp_curve,items,disconnect_attrs=True)   
+    animCurve_nodes = get_animCurve_nodes(items)
+    connect_warp_nodes(warp_curve,animCurve_nodes,disconnect_attrs=True)   
 
     for item in items:
         if item in warp_set.elements():
             warp_set.remove(item)
 
 
-def get_warp_set(warp_curve):
+def get_warp_set(warp_curve, create=True):
     '''
     Get/Create a set with the same name as the Warp Curve.
     '''
     set_name = warp_curve.name()+'_set'
     if not pm.objExists(set_name):
-        return pm.sets(name=set_name,empty=1)
+        if create:
+            return pm.sets(name=set_name,empty=1)
+        return False
     return pm.PyNode(set_name)
+
+def get_warp_node(warp_set):
+    '''
+    Get/Create a set with the same name as the Warp Curve.
+    '''
+    warp_curve_name = warp_set.name()[:-4]
+    # set_name = warp_curve.name()+'_set'
+    if not pm.objExists(warp_curve_name):
+        # if create:
+            # return pm.sets(name=set_name,empty=1)
+        return False
+    return pm.PyNode(warp_curve_name)
 
 # UI Code
 def get_new_name(default_text = None):
@@ -139,7 +171,7 @@ class TimeWarp(object):
         self.warp_holder_layout = None
         self.refresh_button = None
         self.temp_holder_layout = None
-        self.entry_row = []
+        self.entry_rows = []
     
     def make_ui(self):
         if pm.window(self.win_name,q=1,exists=1):
@@ -168,13 +200,13 @@ class TimeWarp(object):
         for warp_curve in pm.ls(self.warp_prefix + '*',typ='animCurve'):
             new_entry = TimeWarpEntry(warp_curve)
             new_entry.create_row()
-            self.entry_row.append(new_entry)
+            self.entry_rows.append(new_entry)
 
     def reload_ui(self,*args,**kwargs):
         '''
         Reload the entire interface
         '''
-        self.entry_row = [] # Empty out the existing list
+        self.entry_rows = [] # Empty out the existing list
         if self.temp_holder_layout:
             # Delete the Temp Holder Layout, make a new one.
             self.temp_holder_layout.delete()
@@ -183,6 +215,7 @@ class TimeWarp(object):
                 self.make_rows()
 
         set_selected_layout_colors(self)
+        add_duplicateSelect_finder_button(self)
         
     
     def add_warp_ui(self,*args,**kwargs):
@@ -202,18 +235,23 @@ class TimeWarp(object):
             
                
 
-class TimeWarpEntry:
+class TimeWarpEntry(TimeWarp,object):
     '''
     Create an individual UI entry with a given TimeWarp Node.
     '''
     def __init__(self,warp_curve):
+        # super(TimeWarpEntry,self).__init__()
         self.warp_curve = warp_curve
         self.warp_layout = None
         self.warp_set = get_warp_set(self.warp_curve)
         self.items = self.warp_set.elements()
+        self.animCurve_nodes = []
         self.toggle_button = None
         self.current_status = None
         self.this_text = None
+        self.controls_button = None
+        self.add_button = None
+        self.subtract_button = None
     
     def create_row(self):
         '''
@@ -237,13 +275,16 @@ class TimeWarpEntry:
                         command = self.delete_warp,
                         annotation='Delete the Warp Node. The Selection Set will NOT be deleted.')
             # Select the TimeWarp node
-            selection_message = '\nShift+Click to add this group to current Selection.\nCtrl+Click to remove this group from current Selection'
+            selection_message = '\nShift+Click to add this group to current Selection.\
+                                \nCtrl+Click to remove this group from current Selection'
             pm.button('TimeWarp',command = self.select_warp,annotation='Select TimeWarp Node'+selection_message,
                       enableBackground=True,backgroundColor=button_color)
             # Select the Controls
             # self.warp_set = get_warp_set(self.warp_curve)
-            pm.button('Controls',command = self.select_set,annotation='Select Connected Nodes.'+selection_message,
-                      enableBackground=True,backgroundColor=button_color)
+            self.controls_button = pm.button('Controls',
+                                             command = self.select_set,
+                                             annotation='Select Connected Nodes.'+selection_message,
+                                             enableBackground=True,backgroundColor=button_color)
             # Enable/disable the TimeWarp for this Set
             self.toggle_button = pm.button('(Set is empty)',command = self.toggle_warp,
                                            annotation='Toggle this TimeWarp!',
@@ -251,13 +292,13 @@ class TimeWarpEntry:
             self.toggle_button.setWidth(82)
             self.get_onOff()
             # Add selected Node to Set
-            pm.button('+ Sel',command = self.add_selection,
-                      annotation='Add Selected items to this timeWarp',
-                      enableBackground=True,backgroundColor=button_color)
+            self.add_button = pm.button('plus_sel',label='+ Sel',command = self.add_selection,
+                                      annotation='Add Selected items to this timeWarp',
+                                      enableBackground=True,backgroundColor=button_color)
             # Remove the Node from this Set
-            pm.button('- Sel',command = self.remove_selection,
-                      annotation='Remove Selected items to this timeWarp',
-                      enableBackground=True,backgroundColor=button_color)
+            self.subtract_button = pm.button('minus_sel',label='- Sel',command = self.remove_selection,
+                                              annotation='Remove Selected items to this timeWarp',
+                                              enableBackground=True,backgroundColor=button_color)
     
     
     def rename_warp(self,*args,**kwargs):
@@ -277,7 +318,9 @@ class TimeWarpEntry:
         '''
         Delete the current warp node.
         '''
-        connect_warp_nodes(self.warp_curve,self.warp_set,disconnect_attrs=True)
+        self.items = self.warp_set.elements()
+        self.animCurve_nodes = get_animCurve_nodes(self.items)
+        connect_warp_nodes(self.warp_curve,self.animCurve_nodes,disconnect_attrs=True)
         pm.evalDeferred(self.warp_layout.delete)
         pm.delete(self.warp_curve)
     
@@ -289,7 +332,6 @@ class TimeWarpEntry:
     
     def select_this(self,selecting_items,*args,**kwargs):
         found_modifier = pm.getModifiers()
-        # print 'found_modifier',found_modifier
         if found_modifier == 1:
             pm.select(selecting_items,add=1)
         elif found_modifier == 4:
@@ -312,8 +354,16 @@ class TimeWarpEntry:
         '''
         Toggle the Connection from Warp Node to Set Items.
         '''
-        self.current_status = not toggle_warp_connection(self.warp_curve,self.items)
-        self.set_status()
+        self.items = self.warp_set.elements()
+        self.animCurve_nodes = get_animCurve_nodes(self.items)
+        
+        if self.animCurve_nodes:
+            disconnect_attrs = any(get_if_connected(self.warp_curve,self.animCurve_nodes))
+            
+            self.current_status = not toggle_warp_connection(self.warp_curve,self.animCurve_nodes)
+            self.set_status()
+        else:
+            self.set_status(set_blank=True)
     
     def add_selection(self,*args,**kwargs):
         '''
@@ -321,17 +371,23 @@ class TimeWarpEntry:
         '''
         add_to_set(self.warp_set)
         self.items = self.warp_set.elements()
+        self.animCurve_nodes = get_animCurve_nodes(self.items)
 
         if not self.current_status:
-            connect_warp_nodes(self.warp_curve,self.items,disconnect_attrs=True)
-        connect_warp_nodes(self.warp_curve,self.items,disconnect_attrs=not self.current_status)
+            connect_warp_nodes(self.warp_curve,self.animCurve_nodes,disconnect_attrs=True)
+        connect_warp_nodes(self.warp_curve,self.animCurve_nodes,disconnect_attrs=not self.current_status)
         self.set_status()
+        self.set_active_color(True)
+        # self.set_status_true()
+        # self.get_onOff()
     
     def remove_selection(self,*args,**kwargs):
         '''
         Remove the selection from the Set AND disconnect it from the Warp Curve.
         '''
         remove_from_set(self.warp_curve,self.warp_set)
+        self.set_active_color(False)
+        self.get_onOff()
         
     
     def get_onOff(self,*args,**kwargs):
@@ -344,7 +400,7 @@ class TimeWarpEntry:
         found_animCurve_nodes = get_animCurve_nodes(self.items)
         
         if not found_animCurve_nodes:
-            set_status_blank(self)
+            self.set_status_blank()
 
         else:
             self.current_status = all(get_if_connected(self.warp_curve,found_animCurve_nodes))
@@ -354,7 +410,7 @@ class TimeWarpEntry:
         if set_blank:
             self.set_status_blank()
         
-        if self.current_status:
+        elif self.current_status:
             self.set_status_true()
         
         else:
@@ -381,8 +437,24 @@ class TimeWarpEntry:
             self.warp_layout.setBackgroundColor([0,0.4,0])
         else:
             self.warp_layout.setEnableBackground(0)
+    
+    def set_plusSel_active(self,set_value,*args,**kwargs):
+        self.add_button.setEnable(set_value)
+    
+    # def select_similar(self):
+    #     found_items = []
+    #     for item in self.items:
+    #         row_counter = 0
+    #         for this_row in self.entry_rows:
+    #             if get_active_row(this_row,item):
+    #                 row_counter += 1
+    #         if row_counter > 1:
+    #             found_items += [item]
+                
+    #     pm.select(found_items)
+    #     set_selected_layout_colors(self)
         
-        
+
     
 
 def get_active_row(this_row,item):
@@ -390,24 +462,55 @@ def get_active_row(this_row,item):
     Get row to match scene selection.
     '''
     if pm.sets(this_row.warp_set,isMember=item) or this_row.warp_curve == item:
-        return this_row.warp_layout
+        return this_row
+    return False
+
+def get_all_active_rows(warp_ui,items=None):
+    items = items or pm.selected()
+    found_rows = {this_row:set() for this_row in warp_ui.entry_rows}
+    for item in items:
+        for this_row in found_rows:
+            this_status = len(found_rows[this_row]) 
+            active_row = get_active_row(this_row,item)
+            if active_row:
+                found_rows[active_row].add(True)
+    return found_rows
 
 def set_selected_layout_colors(warp_ui):
     '''
     With given UI, get the scene selection and change the UI color to reflect the currently selected
     timeWarp.
     '''
-    items = set(pm.selected())
-    found_rows = set()
-    for item in items:
-        for this_row in warp_ui.entry_row:
-            found_rows.add(get_active_row(this_row,item))
+    found_rows = get_all_active_rows(warp_ui)
 
-    for this_row in warp_ui.entry_row:
-        if this_row.warp_layout in found_rows:
-            this_row.set_active_color(True)
-        else:
-            this_row.set_active_color(False)
+    for this_row in warp_ui.entry_rows:
+        this_status = len(found_rows[this_row])
+        this_row.set_active_color(any(found_rows[this_row]))
+
+def select_similar(warp_ui,main_row):
+    found_items = []
+    for item in main_row.items:
+        row_counter = 0
+        for this_row in warp_ui.entry_rows:
+            if get_active_row(this_row,item):
+                row_counter += 1
+        if row_counter > 1:
+            found_items += [item]
+            
+    pm.select(found_items)
+    set_selected_layout_colors(warp_ui)
+
+
+def add_duplicateSelect_finder_button(warp_ui):
+    '''
+    Add a Popup to the Controls button, it'll select all duplicate Entries in the given TimeWarp
+    '''
+    for main_row in warp_ui.entry_rows:
+        this_popup = pm.popupMenu(parent=main_row.controls_button)
+        # Renaming both the Warp node and its set
+        pm.menuItem('Select Duplicate Items',parent=this_popup,
+                    command = pm.Callback(select_similar,warp_ui,main_row),
+                    annotation='If items exist in another Set, this button will select them')
 
 
 def run_it():
@@ -423,4 +526,7 @@ def run_it():
                  uiDeleted=(warp_ui.main_window,
                             pm.Callback(pm.scriptJob,kill=this_jid)))
     set_selected_layout_colors(warp_ui)
+    add_duplicateSelect_finder_button(warp_ui)
+
+
 
