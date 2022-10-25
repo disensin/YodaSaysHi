@@ -20,11 +20,12 @@ from pymel import all as pm
 from pprint import pprint
 import json
 import os
+TOOL_VERSION = '1.3.0'
 
 FBX_EXPORT_JSON = 'fbx_export_log'
 CSV_EXPORT_LOG_NAME = 'fbx_export_csv_log'
 
-def debug_get_shot_folder():
+def debug_get_shot_folder(*args,**kwargs):
     pm.warning('Start Debug...')
     error_message = "No path detected. Open a Shot file saved in the Box Drive Project."
     this_path = mc.file(q=1,sceneName=1) or error_message
@@ -108,16 +109,12 @@ def get_fbx_export_settings_folder():
     return directory_path
 
 def _get_file(directory_path,file_name, extension='json', make_file=False,all_logs=False):
-    # print all_logs
     found_logs = []
     for this_file in os.listdir(directory_path):
         if this_file.startswith(file_name) and this_file.endswith('.'+extension):
             if not all_logs:
-                # print all_logs
                 return os.path.join(directory_path,this_file)
-            # print 'reading: ',os.path.join(directory_path,this_file)
             found_logs += [os.path.join(directory_path,this_file)]
-    # print found_logs
     if make_file:
         file_path = os.path.join(directory_path,file_name+'.'+extension)
         return _write_json(file_path,{})
@@ -326,6 +323,8 @@ def _build_kwargs(jFbxData,
     
     this_name = prefix+this_name
     
+    this_name = this_name.replace(':','__')
+    
     kwargs_dict['this_name'] = this_name+'_'
         
     kwargs_dict['min_time'] = min_time
@@ -347,7 +346,7 @@ def _build_args_list(selection_sets = None,
     if force_set_flag and not selection_sets:
         pm.error('A selection set was not given.')
     
-    found_sets = selection_sets or pm.ls("*:export_anim")
+    found_sets = selection_sets or self.get_all_sets()
     
     
     jFbxData = jFbxData or get_json_data() or JSON_DATA_DEFAULTS
@@ -421,13 +420,16 @@ def export_assets_now(selection_sets=None,
     
         base_node_parent = kwargs['base_node_parent']
         base_node = kwargs['base_node']
-
+        kwargs['reparent_successful'] = True
         if base_node_parent != 'world':
-            base_node.setParent(world=True)
+            try:
+                base_node.setParent(world=True)
+            except:
+                kwargs['reparent_successful'] = False
         
         run_exporter()
         
-        if base_node_parent != 'world':
+        if base_node_parent != 'world' and kwargs['reparent_successful']:
             base_node.setParent(base_node_parent)
         
         write_json_log(kwargs)
@@ -491,256 +493,288 @@ def search_for_string(this_string):
                     print game_file,num,this_line
 ########################
 
-
 ############ UI Code
 class StoredUI:
-    check_boxes = None
-    frameRange_layout = None
-    start_frame_field = None
-    end_frame_field = None
-    set_range_button = None
-    this_path = None
-    destination_field = None
-    options_ui = None
-    check_duplicate_checkbox = None
-    run_test_checkbox = None
-    prefix_textfield = None
-    diagnostic_button = None
-    export_button = None
+    def __init__(self,*args,**kwargs):
+        self.check_boxes = None
+        self.frameRange_layout = None
+        self.start_frame_field = None
+        self.end_frame_field = None
+        self.set_range_button = None
+        self.this_path = None
+        self.destination_field = None
+        self.options_ui = None
+        self.check_duplicate_checkbox = None
+        self.run_test_checkbox = None
+        self.prefix_textfield = None
+        self.diagnostic_button = None
+        self.export_button = None
+        self.refresh_button = None
+        self.sets_list_layout = None
+
+    def get_all_sets(self,*args,**kwargs):
+        return pm.ls("export_anim",recursive=1,typ='objectSet')
 
 
-def make_export_ui():
-    found_sets = pm.ls("*:export_anim")
-
-    try:
-        StoredUI.this_path = get_ue_shot_folder()[-1]
-    except:
-        debug_get_shot_folder()
-    StoredUI.check_boxes = []
-
-    this_title = 'ExportTheseSets'
-    if pm.window(this_title,exists=1,q=1):
-        pm.deleteUI(this_title)
-    
-    # if pre_min_time != animStart_time or pre_max_time != animEnd_time:
-    
-    with pm.window(this_title,title='Export These Sets',width=275):
-        with pm.columnLayout(columnAlign='center',columnAttach=['left',2]):
-            
-            pm.separator(height=15)
-            with pm.columnLayout():            
-                pm.text('Luka FBX Exporter!', font='fixedWidthFont', align='center', width=275)
-                # pm.button('Refresh')
-            pm.separator(height=15)
-            with pm.frameLayout("Select Sets to Export",width=275):
-                
-                with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[.6]*3):
-                    for found_set in found_sets:
-                        pm.separator(width=5,style='none')
-                        StoredUI.check_boxes.append(pm.checkBox(found_set,
-                                                                changeCommand=pm.Callback(checkbox_toggles,StoredUI)))
-                        
-            pm.separator(height=5)
-            # with pm.frameLayout("Frame Range", borderVisible=1,width=275, labelVisible=False) as StoredUI.options_ui:
-            with pm.rowColumnLayout(numberOfColumns=7,width=275) as StoredUI.frameRange_layout:
+    def refresh_sets_list(self,*args,**kwargs):
+        found_sets = self.get_all_sets()
+        
+        # pm.deleteUI(self.sets_list_layout.getChildren())
+        if self.check_boxes:
+            pm.deleteUI(self.check_boxes)
+        self.check_boxes = []
+        with self.sets_list_layout:
+            for found_set in found_sets:
                 pm.separator(width=5,style='none')
-                pm.text("Frame Range: ")
-                StoredUI.start_frame_field = pm.textField(width=50, changeCommand=pm.Callback(set_range,StoredUI))
-                pm.text(" - ")                    
-                StoredUI.end_frame_field = pm.textField(width=50, changeCommand=pm.Callback(set_range,StoredUI))
-                pm.text(" ")
-                StoredUI.set_range_button = pm.button('Set Range',
-                                                      command = pm.Callback(set_frame_range,
-                                                                            StoredUI),
-                                                      annotation='If RED, Frame Range is not set to Full.',
-                                                      width=65)
-                        
-            pm.separator(height=5)
-            with pm.frameLayout("Destination Folder",width=275,borderVisible=0):
-                with pm.rowColumnLayout(numberOfColumns=3):#,backgroundColor=[0.7]*3):
-                    pm.separator(width=5,style='none')
-                    StoredUI.destination_field = pm.textField('Final Path',
-                                                              text=StoredUI.this_path,
-                                                              enable=True,
-                                                              width=200)
-                    pm.button('Browse',command=pm.Callback(set_new_path,StoredUI))
-                    pm.separator(width=2,style='none')
-                    pm.button('Reset Path',command=pm.Callback(reset_path,StoredUI),width=100)
-                    # print_kwargs_only(StoredUI)
-            pm.separator(height=5)
-            with pm.frameLayout("More Options", collapsable=1, borderVisible=0,width=275) as StoredUI.options_ui:
-                
-                with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[0.7]*3):
-                    pm.separator(width=5,style='none')
+                self.check_boxes.append(pm.checkBox(found_set,
+                                                        changeCommand=self.checkbox_toggles))
+        self.checkbox_toggles()
+        
+
+    def make_ui(self,*args,**kwargs):
+        found_sets = self.get_all_sets()
+
+        try:
+            self.this_path = get_ue_shot_folder()[-1]
+        except:
+            debug_get_shot_folder()
+        self.check_boxes = []
+
+        this_title = 'ExportTheseSets'
+        if pm.window(this_title,exists=1,q=1):
+            pm.deleteUI(this_title)
+        
+        # if pre_min_time != animStart_time or pre_max_time != animEnd_time:
+        
+        with pm.window(this_title,title='Export These Sets',width=275):
+            with pm.columnLayout(columnAlign='center',columnAttach=['left',2]) as main_column:
+                pm.separator(height=15)
+                with pm.columnLayout():            
+                    pm.text('Luka FBX Exporter!\nv'+TOOL_VERSION, font='fixedWidthFont', align='center', width=275)
+                    # pm.button('Refresh')
+                pm.separator(height=15)
+                self.refresh_button = pm.button('Refresh',width=275,command=self.refresh_sets_list)
+                # self.refresh_button.setCommand(self.refresh_sets_list)
+                with pm.frameLayout("Select Sets to Export",width=275):
                     
-                    with pm.columnLayout():
-                        StoredUI.check_duplicate_checkbox = pm.checkBox('Check Duplicates',value=True)
-                        StoredUI.run_test_checkbox = pm.checkBox('Run Test',
-                                                                 annotation= 'Exports 10 frames, adds "_TEST_" string',
-                                                                 changeCommand=pm.Callback(set_frame_range,StoredUI))
-                        with pm.rowColumnLayout(numberOfColumns=3):
-                            pm.text("Use Prefix: ")
-                            StoredUI.prefix_textfield = pm.textField('Prefix')
-                            pm.text(" _assetName")
-                        with pm.rowLayout(numberOfColumns=3):
-                            pm.button('Debug',
-                                       command=pm.Callback(debug_get_shot_folder),
-                                       annotation = '(not mandatory) Print out of Directory Detection.')
-                            StoredUI.diagnostic_button = pm.button('Print Diagnostics',
-                                                                   command=pm.Callback(print_kwargs_only,StoredUI),
-                                                                   annotation = '(not mandatory) Show printout of\n'
-                                                                    'the settings that will be used during Export.')
-                            write_to_csv_button = pm.button('Write CSV',
-                                                           command=pm.Callback(convert_json_to_csv,get_path=True),
-                                                           annotation = '(not mandatory) Write out the current exports to CSV')
-                            # self.this_text = pm.text(self.warp_curve.name(),align='left',width=100,
-                            #          annotation='Right Click for options!')
-                            # Create a popup menu
-                            this_popup = pm.popupMenu()
-                            # Renaming both the Warp node and its set
-                            pm.menuItem('Combine duplicate JSON',parent=this_popup,
-                                        command = _combine_excess_json_files,
-                                        annotation='Find and combine excess JSON files.')
-                             
-            pm.separator(height=10)
+                    # with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[.6]*3) as main_row:
+                    with pm.scrollLayout(backgroundColor=[.6]*3) as self.sets_list_layout:
+                        pass
+                    
+                pm.separator(height=5)
+                
+                # with pm.frameLayout("Frame Range", borderVisible=1,width=275, labelVisible=False) as self.options_ui:
+                with pm.rowColumnLayout(numberOfColumns=7,width=275) as self.frameRange_layout:
+                    pm.separator(width=5,style='none')
+                    pm.text("Frame Range: ")
+                    self.start_frame_field = pm.textField(width=50, changeCommand=self.set_range)
+                    pm.text(" - ")                    
+                    self.end_frame_field = pm.textField(width=50, changeCommand=self.set_range)
+                    pm.text(" ")
+                    self.set_range_button = pm.button('Set Range',
+                                                          command = self.set_frame_range,
+                                                          annotation='If RED, Frame Range is not set to Full.',
+                                                          width=65)
+                
+                pm.separator(height=5)
+                with pm.frameLayout("Destination Folder",width=275,borderVisible=0):
+                    with pm.rowColumnLayout(numberOfColumns=3):#,backgroundColor=[0.7]*3):
+                        pm.separator(width=5,style='none')
+                        self.destination_field = pm.textField('Final Path',
+                                                                  text=self.this_path,
+                                                                  enable=True,
+                                                                  width=200)
+                        pm.button('Browse',command=self.set_new_path)
+                        pm.separator(width=2,style='none')
+                        pm.button('Reset Path',command=self.reset_path,width=100)
+                        # self.print_kwargs_only()
+                
+                pm.separator(height=5)
+                with pm.frameLayout("More Options", collapsable=1, borderVisible=0,width=275) as self.options_ui:
+                    
+                    with pm.rowColumnLayout(numberOfColumns=2,backgroundColor=[0.7]*3):
+                        pm.separator(width=5,style='none')
+                        
+                        with pm.columnLayout():
+                            self.check_duplicate_checkbox = pm.checkBox('Check Duplicates',value=True)
+                            self.run_test_checkbox = pm.checkBox('Run Test',
+                                                                     annotation= 'Exports 10 frames, adds "_TEST_" string',
+                                                                     changeCommand=self.set_frame_range)
+                            with pm.rowColumnLayout(numberOfColumns=3):
+                                pm.text("Use Prefix: ")
+                                self.prefix_textfield = pm.textField('Prefix')
+                                pm.text(" _assetName")
+                            with pm.rowLayout(numberOfColumns=3):
+                                pm.button('Debug',
+                                           command=debug_get_shot_folder,
+                                           annotation = '(not mandatory) Print out of Directory Detection.')
+                                self.diagnostic_button = pm.button('Print Diagnostics',
+                                                                       command=self.print_kwargs_only,
+                                                                       annotation = '(not mandatory) Show printout of\n'
+                                                                        'the settings that will be used during Export.')
+                                write_to_csv_button = pm.button('Write CSV',
+                                                               command=pm.Callback(convert_json_to_csv,get_path=True),
+                                                               annotation = '(not mandatory) Write out the current exports to CSV')
+                                # self.this_text = pm.text(self.warp_curve.name(),align='left',width=100,
+                                #          annotation='Right Click for options!')
+                                # Create a popup menu
+                                this_popup = pm.popupMenu()
+                                # Renaming both the Warp node and its set
+                                pm.menuItem('Combine duplicate JSON',parent=this_popup,
+                                            command = _combine_excess_json_files,
+                                            annotation='Find and combine excess JSON files.')
+                                 
+                pm.separator(height=10)
 
-            StoredUI.export_button = pm.button('Export Checked',
-                                               command = pm.Callback(run_export_from_ui,StoredUI),
-                                               width=275)
-            checkbox_toggles(StoredUI)
-            pm.separator(height=10)
-    set_frame_range(StoredUI)
-    StoredUI.options_ui.setCollapse(True)
+                self.export_button = pm.button('Export Checked',
+                                                   command = self.run_export_from_ui,
+                                                   width=275)
+                pm.separator(height=10)
 
-
-def checkbox_toggles(StoredUI):
-    current_state = len(get_enabled_checkboxes(StoredUI))
-
-    this_annotation = 'Check Sets ON to enable this button.'
-    if current_state:
-        this_annotation = 'Assets ready to export!'
+        self.refresh_sets_list()
+        self.sets_list_layout.setHeight(len(self.check_boxes)*20)
         
-    StoredUI.export_button.setEnable(current_state)
-    StoredUI.export_button.setBackgroundColor([0.3]*3)
-    
-    layout_detected = False
-    for check_box in StoredUI.check_boxes:
-        asset_name = check_box.name().split('|')[-1]
-        if 'layout' in asset_name.lower():
-            check_box.setBackgroundColor([0.6,0.6,0])
-            check_box.setAnnotation('Layout assets NOT necessary to Export. Double-check with Adrian.')
+        # for found_set in found_sets:
+        #     pm.separator(width=5,style='none')
+        #     self.check_boxes.append(pm.checkBox(found_set,
+        #                                             changeCommand=self.checkbox_toggles))
+        self.set_frame_range()
+        self.options_ui.setCollapse(True)
+
+
+    def checkbox_toggles(self,*args,**kwargs):
+        current_state = len(self.get_enabled_checkboxes())
+
+        this_annotation = 'Check Sets ON to enable this button.'
+        if current_state:
+            this_annotation = 'Assets ready to export!'
+            
+        self.export_button.setEnable(current_state)
+        self.export_button.setBackgroundColor([0.3]*3)
+        
+        layout_detected = False
+        for check_box in self.check_boxes:
+            asset_name = check_box.name().split('|')[-1]
+            if 'layout' in asset_name.lower():
+                check_box.setBackgroundColor([0.6,0.6,0])
+                check_box.setAnnotation('Layout assets NOT necessary to Export. Double-check with Adrian.')
+                if check_box.getValue():
+                    layout_detected = True
+        
+        if layout_detected:
+            this_annotation += ' Layout assets detected.'
+            self.export_button.setBackgroundColor([0.9,0.9,0])
+
+            
+        self.export_button.setAnnotation(this_annotation)
+        self.export_button.setEnableBackground( layout_detected)
+        
+        self.diagnostic_button.setEnable(current_state)
+
+
+    def set_range(self,*args,**kwargs):
+        pm.playbackOptions(e=1,minTime=float(self.start_frame_field.getText()))
+        pm.playbackOptions(e=1,maxTime=float(self.end_frame_field.getText()))
+        self.set_frame_range()
+        
+
+
+    def set_frame_range(self,*args,**kwargs):
+        self.start_frame = pm.playbackOptions(q=1,minTime=1)
+        self.end_frame = pm.playbackOptions(q=1,maxTime=1)
+        animStart_time = pm.playbackOptions(q=1,animationStartTime=1)
+        animEnd_time = pm.playbackOptions(q=1,animationEndTime=1)
+
+        if self.run_test_checkbox.getValue():
+            self.start_frame = animStart_time
+            self.end_frame = animStart_time + 10.0
+            self.frameRange_layout.setEnable(False)
+        else:
+            self.frameRange_layout.setEnable(True)
+        self.start_frame_field.setText(str(self.start_frame))
+        self.end_frame_field.setText(str(self.end_frame))
+
+        # print 'UI Color',self.options_ui.getBackgroundColor()
+        if self.start_frame != animStart_time or self.end_frame != animEnd_time:
+            self.set_range_button.noBackground(1) # Disabled Grey
+            self.set_range_button.setBackgroundColor([1,0,0]) # Red
+
+            # self.options_ui.setEnableBackground(1)
+            # self.options_ui.setBackgroundColor([1,0,0])
+        else:
+            # print 'time set'
+            
+            # self.options_ui.setBackgroundColor([0.4]*3)
+            # self.options_ui.setEnableBackground(0)
+            
+            self.set_range_button.setBackgroundColor([0,0,0])
+            self.set_range_button.noBackground(0) # Disabled Grey
+        
+
+    def reset_path(self,*args,**kwargs):
+        self.this_path = get_ue_shot_folder()[-1]
+        self.destination_field.setText(self.this_path)    
+
+    def set_new_path(self,*args,**kwargs):
+        new_path = browse_custom_path(starting_directory=self.this_path)
+        if new_path:
+            self.this_path = new_path[0]
+            self.destination_field.setText(self.this_path)
+
+    def browse_custom_path(self,starting_directory=None):
+        return pm.fileDialog2(fileMode=2,startingDirectory=starting_directory) or False
+
+    def get_enabled_checkboxes(self,*args,**kwargs):
+        selected_sets = []
+        for check_box in self.check_boxes:
             if check_box.getValue():
-                layout_detected = True
-    
-    if layout_detected:
-        this_annotation += ' Layout assets detected.'
-        StoredUI.export_button.setBackgroundColor([0.9,0.9,0])
+                selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
+        return selected_sets
+
+    def run_export_from_ui(self,*args,**kwargs):
+        original_selection = pm.selected()
+
+        selected_sets = self.get_enabled_checkboxes()
+        
+        custom_path = self.this_path
 
         
-    StoredUI.export_button.setAnnotation(this_annotation)
-    StoredUI.export_button.setEnableBackground( layout_detected)
+        export_assets_now(selection_sets = selected_sets,
+                        check_duplicates = self.check_duplicate_checkbox.getValue(),
+                        test_range = self.run_test_checkbox.getValue(),
+                        prefix = self.prefix_textfield.getText(),
+                        force_set_flag = True,
+                        custom_path = custom_path,
+                        frame_range = [self.start_frame , self.end_frame],
+                        from_ui = True,)
+
+        pm.select(original_selection)
+
+    def print_kwargs_only(self,*args,**kwargs):
+        original_selection = pm.selected()
+        selected_sets = []
+        for check_box in self.check_boxes:
+            if check_box.getValue():
+                selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
+
+        custom_path = self.this_path
+
+        export_assets_now(selection_sets = selected_sets,
+                        check_duplicates = self.check_duplicate_checkbox.getValue(),
+                        test_range = self.run_test_checkbox.getValue(),
+                        prefix = self.prefix_textfield.getText(),
+                        force_set_flag = True,
+                        custom_path = custom_path,
+                        frame_range = [self.start_frame , self.end_frame],
+                        from_ui = True,
+                        print_kwargs_only = True)
+
+        pm.select(original_selection)
     
-    StoredUI.diagnostic_button.setEnable(current_state)
+def make_export_ui():
+    StoredUI().make_ui()
 
-
-def set_range(StoredUI):
-    pm.playbackOptions(e=1,minTime=float(StoredUI.start_frame_field.getText()))
-    pm.playbackOptions(e=1,maxTime=float(StoredUI.end_frame_field.getText()))
-    set_frame_range(StoredUI)
-
-
-def set_frame_range(StoredUI):
-    StoredUI.start_frame = pm.playbackOptions(q=1,minTime=1)
-    StoredUI.end_frame = pm.playbackOptions(q=1,maxTime=1)
-    animStart_time = pm.playbackOptions(q=1,animationStartTime=1)
-    animEnd_time = pm.playbackOptions(q=1,animationEndTime=1)
-
-    if StoredUI.run_test_checkbox.getValue():
-        StoredUI.start_frame = animStart_time
-        StoredUI.end_frame = animStart_time + 10.0
-        StoredUI.frameRange_layout.setEnable(False)
-    else:
-        StoredUI.frameRange_layout.setEnable(True)
-    
-    StoredUI.start_frame_field.setText(str(StoredUI.start_frame))
-    StoredUI.end_frame_field.setText(str(StoredUI.end_frame))
-
-    # print 'UI Color',StoredUI.options_ui.getBackgroundColor()
-    if StoredUI.start_frame != animStart_time or StoredUI.end_frame != animEnd_time:
-        StoredUI.set_range_button.noBackground(1) # Disabled Grey
-        StoredUI.set_range_button.setBackgroundColor([1,0,0]) # Red
-
-        # StoredUI.options_ui.setEnableBackground(1)
-        # StoredUI.options_ui.setBackgroundColor([1,0,0])
-    else:
-        
-        # StoredUI.options_ui.setBackgroundColor([0.4]*3)
-        # StoredUI.options_ui.setEnableBackground(0)
-        
-        StoredUI.set_range_button.setBackgroundColor([0,0,0])
-        StoredUI.set_range_button.noBackground(0) # Disabled Grey
-    
-
-def reset_path(StoredUI):
-    StoredUI.this_path = get_ue_shot_folder()[-1]
-    StoredUI.destination_field.setText(StoredUI.this_path)    
-
-def set_new_path(StoredUI):
-    new_path = browse_custom_path(starting_directory=StoredUI.this_path)
-    if new_path:
-        StoredUI.this_path = new_path[0]
-        StoredUI.destination_field.setText(StoredUI.this_path)
-
-def browse_custom_path(starting_directory=None):
-    return pm.fileDialog2(fileMode=2,startingDirectory=starting_directory) or False
-
-def get_enabled_checkboxes(StoredUI):
-    selected_sets = []
-    for check_box in StoredUI.check_boxes:
-        if check_box.getValue():
-            selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
-    return selected_sets
-
-def run_export_from_ui(StoredUI):
-    original_selection = pm.selected()
-
-    selected_sets = get_enabled_checkboxes(StoredUI)
-    
-    custom_path = StoredUI.this_path
-
-    
-    export_assets_now(selection_sets = selected_sets,
-                    check_duplicates = StoredUI.check_duplicate_checkbox.getValue(),
-                    test_range = StoredUI.run_test_checkbox.getValue(),
-                    prefix = StoredUI.prefix_textfield.getText(),
-                    force_set_flag = True,
-                    custom_path = custom_path,
-                    frame_range = [StoredUI.start_frame , StoredUI.end_frame],
-                    from_ui = True,)
-
-    pm.select(original_selection)
-
-def print_kwargs_only(StoredUI):
-    original_selection = pm.selected()
-    selected_sets = []
-    for check_box in StoredUI.check_boxes:
-        if check_box.getValue():
-            selected_sets.append(pm.PyNode(check_box.name().split('|')[-1]))
-
-    custom_path = StoredUI.this_path
-
-    export_assets_now(selection_sets = selected_sets,
-                    check_duplicates = StoredUI.check_duplicate_checkbox.getValue(),
-                    test_range = StoredUI.run_test_checkbox.getValue(),
-                    prefix = StoredUI.prefix_textfield.getText(),
-                    force_set_flag = True,
-                    custom_path = custom_path,
-                    frame_range = [StoredUI.start_frame , StoredUI.end_frame],
-                    from_ui = True,
-                    print_kwargs_only = True)
-
-    pm.select(original_selection)
-    
+# run_it()
 
 THIS_MEL_COMMAND ='''
 global proc NEW_gameExp_DoExport()
