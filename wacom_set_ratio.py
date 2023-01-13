@@ -17,22 +17,21 @@ import subprocess
 arguments = sys.argv
 
 if '-h' in arguments or '--help' in arguments:
-    print """Description:
- This tool will change the Aspect Ratio of your current Wacom Tablet to match the screen's layout!
- Once run, if you draw a circle on the tablet, it'll draw a circle on the screen.
- 
- Options:
-  -h,  --help       This info.
-  -reset            Reset the area to Default.
-  -debug            0 : No output
-                    1 : New ratio
-                    2 : Will return the exact code running
-                        to set the desired Ratio, will NOT run the code.
-    """
+    print("Description:")
+    " This tool will change the Aspect Ratio of your current Wacom Tablet to match the screen's layout!"
+    " Once run, if you draw a circle on the tablet, it'll draw a circle on the screen."
+    " "
+    " Options:"
+    '  -h,  --help       This info.'
+    '  -reset            Reset the area to Default.'
+    '  -debug            0 : No output'
+    '                    1 : New ratio'
+    '                    2 : Will return the exact code running'
+    '                        to set the desired Ratio, will NOT run the code.'
     sys.exit()
 
 if '-debug' in arguments and '-reset' in arguments:
-    print "ERROR: '-debug' and '-reset' must be used independently."
+    print( "ERROR: '-debug' and '-reset' must be used independently.")
     sys.exit()
 
 def get_from_shell(run_string):
@@ -145,15 +144,15 @@ def set_wacom_ratio(debug=False,reset=False):
             # else:
             #     run_code = 
     if debug >= 2:
-        print "SCREEN RATIO:::"
-        print get_screens_ratio()
-        print "WACOM DEVICES:::"
-        print get_wacom_device()
-        print "CODE TO RUN:::"
-        print run_code
+        print ("SCREEN RATIO:::")
+        print( get_screens_ratio())
+        print( "WACOM DEVICES:::")
+        print( get_wacom_device())
+        print( "CODE TO RUN:::")
+        print( run_code)
         return
     if debug >= 1 and not reset:
-        print "Wacom {0} Ratio: Changed to {1}".format(changed_ratio,screen_ratio)
+        print( "Wacom {0} Ratio: Changed to {1}".format(changed_ratio,screen_ratio))
     # os.system(run_code)
     get_from_shell(run_code)
 # If there are Arguments
@@ -171,7 +170,7 @@ for num,arg in enumerate(arguments):
             current_value = int(arguments[num+1])
         except:
             set_wacom_ratio(debug=0,reset=1)
-        print 'Wacom Ratio: Reset!'
+        print( 'Wacom Ratio: Reset!')
         sys.exit()
 
 
